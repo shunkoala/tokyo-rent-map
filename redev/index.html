@@ -156,40 +156,49 @@ const FC = { type:'FeatureCollection', features: PROJECTS.map(p => ({
 
 // ===== 地図 =====
 const HOME = { center:[139.745, 35.668], zoom:12.6, pitch:57, bearing:-20 };
-const FALLBACK_STYLE = { version:8, sources:{}, layers:[{ id:'bg', type:'background', paint:{'background-color':'#dfe8ef'} }] };
-let styleHasBase = true;
+// 信頼性重視: ベースはCARTOラスター(positron)。建物3DはOpenFreeMapベクター(読めたら追加)
+const BASE_STYLE = {
+  version: 8,
+  sources: {
+    carto: {
+      type: 'raster', tileSize: 256,
+      tiles: ['a','b','c','d'].map(s => `https://${s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png`),
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a> / 建物: <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a>',
+      maxzoom: 19,
+    },
+    ofm: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' },
+  },
+  layers: [
+    { id: 'bg', type: 'background', paint: { 'background-color': '#e9ebed' } },
+    { id: 'carto', type: 'raster', source: 'carto' },
+  ],
+};
 
-async function boot() {
-  let style = 'https://tiles.openfreemap.org/styles/positron';
-  try {
-    const r = await fetch(style, { mode:'cors' });
-    if (!r.ok) throw 0;
-  } catch (e) { style = FALLBACK_STYLE; styleHasBase = false; }
-  const map = new maplibregl.Map({ container:'map', style, ...HOME, maxPitch:75, antialias:true, attributionControl:{compact:false} });
-  map.addControl(new maplibregl.NavigationControl({ visualizePitch:true }), 'top-left');
+function boot() {
+  const map = new maplibregl.Map({ container:'map', style:BASE_STYLE, ...HOME, maxPitch:75, antialias:true });
   window.__map = map;
-  map.on('load', () => { try { onLoad(map); console.log('onLoad ok, pitch=', map.getPitch()); } catch(e) { console.error('onLoad failed:', e); } });
+  map.addControl(new maplibregl.NavigationControl({ visualizePitch:true }), 'top-left');
+  let inited = false;
+  const init = () => { if (inited) return; inited = true; try { onLoad(map); } catch(e) { console.error('init failed:', e); } };
+  map.on('style.load', init);
+  setTimeout(init, 3000); // 保険: どのイベントも来なくても初期化
   map.on('error', e => console.warn('map error:', e && e.error && e.error.message));
   document.getElementById('resetView').addEventListener('click', () => map.flyTo({ ...HOME, duration:1200 }));
-  return map;
+  return Promise.resolve(map);
 }
 
 function onLoad(map) {
-  // 現在の街並み(OSM建物)を3D化
-  if (styleHasBase) {
-    const src = map.getStyle().sources.openmaptiles ? 'openmaptiles'
-      : Object.keys(map.getStyle().sources).find(k => map.getStyle().sources[k].type === 'vector');
-    if (src) {
-      map.addLayer({
-        id:'osm-3d', type:'fill-extrusion', source:src, 'source-layer':'building', minzoom:13,
-        paint:{
-          'fill-extrusion-color':'#d5d9dd',
-          'fill-extrusion-height':['coalesce',['get','render_height'],['get','height'],8],
-          'fill-extrusion-base':['coalesce',['get','render_min_height'],0],
-          'fill-extrusion-opacity':.75,
-        }});
-    }
-  }
+  // 現在の街並み(OSM建物)を3D化 — OpenFreeMapベクターが読めた場合のみ
+  try {
+    map.addLayer({
+      id:'osm-3d', type:'fill-extrusion', source:'ofm', 'source-layer':'building', minzoom:13,
+      paint:{
+        'fill-extrusion-color':'#d5d9dd',
+        'fill-extrusion-height':['coalesce',['get','render_height'],['get','height'],8],
+        'fill-extrusion-base':['coalesce',['get','render_min_height'],0],
+        'fill-extrusion-opacity':.75,
+      }});
+  } catch(e) { console.warn('osm-3d skipped:', e.message); }
   map.addSource('redev', { type:'geojson', data:FC });
   // 未来分のゴースト(まだ年が来ていない計画)
   map.addLayer({ id:'redev-ghost', type:'line', source:'redev',
