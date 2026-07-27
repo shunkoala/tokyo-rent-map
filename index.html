@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>東京 家賃コスパ路線図 — 家賃で歪む東京の地図</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0d0d0d; color: #ffffff;
+    font-family: system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif;
+    min-height: 100vh; padding: 18px 22px 30px;
+  }
+  header h1 { font-size: 22px; font-weight: 700; letter-spacing: .02em; }
+  header .sub { color: #c3c2b7; font-size: 13px; margin-top: 4px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 14px 0 10px; }
+  .modebtn {
+    background: #1a1a19; color: #c3c2b7; border: 1px solid rgba(255,255,255,.14);
+    border-radius: 8px; padding: 7px 14px; font-size: 13px; cursor: pointer;
+  }
+  .modebtn:hover { color: #fff; border-color: rgba(255,255,255,.3); }
+  .modebtn.active { background: #2e2e2c; color: #fff; border-color: rgba(255,255,255,.45); font-weight: 700; }
+  #modeNote { color: #898781; font-size: 12px; margin-left: 6px; }
+  .layout { display: flex; gap: 16px; align-items: stretch; }
+  .mapwrap {
+    flex: 1 1 auto; min-width: 0; background: #1a1a19;
+    border: 1px solid rgba(255,255,255,.10); border-radius: 12px; position: relative; overflow: hidden;
+  }
+  #map { width: 100%; height: 74vh; min-height: 540px; background: #1a1a19; }
+  /* 地理院タイル(淡色)をダーク化 */
+  .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.92) contrast(.88) saturate(.55); }
+  body.lightbase .leaflet-tile-pane { filter: none; }
+  body.lightbase .lab { fill: #1f1e1b; stroke: rgba(252,252,251,.88); }
+  body.lightbase .lab.major, body.lightbase .lab.toplab, body.lightbase .lab.hl { fill: #0b0b0b; }
+  body.lightbase .st .dot { fill: #fcfcfb; }
+  body.lightbase .topring { stroke: #0b0b0b; }
+  body.lightbase .st.hl .dot { stroke: #0b0b0b; }
+  body.lightbase #map { background: #f0efec; }
+  .leaflet-control-attribution { background: rgba(13,13,13,.75); color: #898781; font-size: 10px; }
+  .leaflet-control-attribution a { color: #c3c2b7; }
+  .leaflet-control-zoom a { background: #1a1a19; color: #c3c2b7; border-color: rgba(255,255,255,.15); }
+  .leaflet-control-zoom a:hover { background: #2e2e2c; color: #fff; }
+  .d3overlay { position: absolute; pointer-events: none; }
+  aside {
+    width: 240px; flex: 0 0 240px; background: #1a1a19;
+    border: 1px solid rgba(255,255,255,.10); border-radius: 12px; padding: 14px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  aside h2 { font-size: 14px; margin-bottom: 4px; }
+  aside .note { color: #898781; font-size: 11px; margin-bottom: 6px; }
+  .rk-item {
+    display: grid; grid-template-columns: 24px 1fr auto; gap: 6px; align-items: center;
+    padding: 6px 6px; border-radius: 8px; cursor: default; font-size: 12.5px;
+  }
+  .rk-item:hover { background: #2a2a28; }
+  .rk-no { color: #898781; font-weight: 700; text-align: right; }
+  .rk-name { font-weight: 700; }
+  .rk-detail { color: #c3c2b7; font-size: 11px; text-align: right; line-height: 1.35; }
+  .good { color: #0ca30c; font-weight: 700; }
+  #legend { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 4px; }
+  .legend-item {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: #1a1a19; border: 1px solid rgba(255,255,255,.12); border-radius: 999px;
+    color: #c3c2b7; font-size: 11.5px; padding: 4px 10px; cursor: pointer;
+  }
+  .legend-item:hover { color: #fff; }
+  .legend-item.off { opacity: .35; }
+  .swatch { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+  .route { fill: none; stroke-width: 3.5; stroke-linecap: round; stroke-opacity: .85; }
+  .route.dim { stroke-opacity: .06; }
+  .st .dot { fill: #1a1a19; stroke-width: 2; pointer-events: auto; cursor: pointer; }
+  .st.dim { opacity: .12; }
+  .st.hl .dot { stroke: #fff; stroke-width: 3.5; }
+  .topring { fill: none; stroke: #ffffff; stroke-width: 1.2; stroke-dasharray: 3 2.5; opacity: .9; }
+  .lab { fill: #e8e6df; font-size: 11px; paint-order: stroke; stroke: rgba(13,13,13,.85); stroke-width: 3px; opacity: 0; }
+  .lab.major, .lab.toplab { opacity: 1; fill: #fff; }
+  .lab.toplab { font-weight: 700; }
+  .zoomed .lab { opacity: 1; }
+  .chartmode .lab { opacity: 0; }
+  .chartmode .lab.toplab, .chartmode .lab.major { opacity: 1; }
+  .lab.dim { opacity: 0 !important; }
+  .lab.hl { fill: #fff; font-weight: 700; opacity: 1; }
+  .axes text { fill: #898781; font-size: 11px; }
+  .axes .axlab { fill: #c3c2b7; font-size: 12px; }
+  .axes line { stroke: #2c2c2a; }
+  .axes .trend { stroke: #898781; stroke-dasharray: 6 4; stroke-width: 1.5; }
+  .axes .trendlab { fill: #c3c2b7; font-size: 11px; }
+  #tooltip {
+    position: fixed; display: none; pointer-events: none; z-index: 2000;
+    background: #262624; border: 1px solid rgba(255,255,255,.16); border-radius: 10px;
+    padding: 10px 12px; font-size: 12px; color: #c3c2b7; max-width: 230px;
+    box-shadow: 0 6px 24px rgba(0,0,0,.5);
+  }
+  .tt-name { color: #fff; font-weight: 700; font-size: 13.5px; margin-bottom: 4px; }
+  .tt-lines { font-size: 11px; margin-bottom: 6px; line-height: 1.5; }
+  .tt-row { margin-top: 2px; }
+  .tt-row b { color: #fff; }
+  .chip { width: 9px; height: 9px; display: inline-block; border-radius: 2px; margin-right: 5px; }
+  details { margin-top: 16px; }
+  summary { cursor: pointer; color: #c3c2b7; font-size: 13px; }
+  #datatable { border-collapse: collapse; margin-top: 10px; font-size: 12px; width: 100%; max-width: 820px; }
+  #datatable th, #datatable td { padding: 5px 10px; text-align: left; border-bottom: 1px solid #2c2c2a; }
+  #datatable th { color: #898781; font-weight: 600; }
+  #datatable td { color: #c3c2b7; font-variant-numeric: tabular-nums; }
+  footer { margin-top: 18px; color: #898781; font-size: 11px; line-height: 1.7; max-width: 900px; }
+  footer a { color: #898781; }
+  @media (max-width: 900px) {
+    .layout { flex-direction: column; }
+    aside { width: 100%; flex: none; }
+    #map { height: 62vh; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>東京 家賃コスパ路線図</h1>
+  <div class="sub">駅の位置を「家賃の高さ」で歪ませた東京の地図 — 都心に近いのに安い駅ほど、外へ飛び出します。</div>
+</header>
+
+<div class="controls">
+  <button class="modebtn active" data-mode="geo">🗺️ 実際の地図</button>
+  <button class="modebtn" data-mode="rent">💴 家賃マップ</button>
+  <button class="modebtn" data-mode="chart">📊 時間×家賃チャート</button>
+  <button class="modebtn" id="baseToggle" title="背景地図の配色を切り替え">🌓 背景: ダーク</button>
+  <span id="modeNote"></span>
+</div>
+
+<div id="legend"></div>
+
+<div class="layout">
+  <div class="mapwrap">
+    <div id="map" role="img" aria-label="東京の路線図。モードに応じて駅の位置が実際の地図・家賃・所要時間で切り替わる。"></div>
+  </div>
+  <aside>
+    <h2>⭐ 穴場ランキング TOP10</h2>
+    <div class="note">「都心までの時間のわりに家賃が安い」駅の順位(相場トレンドからの割安幅)</div>
+    <div id="ranking"></div>
+  </aside>
+</div>
+
+<details>
+  <summary>全駅データ一覧(コスパ順)</summary>
+  <table id="datatable">
+    <thead><tr><th>順位</th><th>駅</th><th>路線</th><th>家賃(万円)</th><th>都心まで(分)</th><th>相場との差</th></tr></thead>
+    <tbody></tbody>
+  </table>
+</details>
+
+<footer>
+  <b>データについて</b> — 家賃は駅ごとのシングル向け(ワンルーム・1K・1DK)家賃相場の<b>目安</b>で、SUUMOジャーナル/リクルート公表の駅別家賃相場ランキング(2025〜2026年)、CHINTAI・Yahoo!不動産の駅別相場ページなど公開情報をもとにした推定値です。所要時間は東京・新宿・渋谷・池袋・上野・品川のうち最寄りターミナルへの日中の目安(乗換込み)。個々の物件の家賃や実際の所要時間とは異なります。路線は主要13路線・約160駅を収録(各駅停車のみの駅など一部省略)。背景地図は国土地理院「地理院タイル(淡色地図)」を色調変換して使用しています。
+</footer>
+
+<div id="tooltip"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+// ===== 東京 家賃コスパ路線図 データセット =====
+// rent: シングル向け(ワンルーム・1K・1DK)家賃相場の目安(万円)
+//       SUUMO/リクルート公表ランキング(2025-2026)等をもとにした推定値
+// time: 都心主要ターミナル(東京・新宿・渋谷・池袋・上野・品川)への
+//       最短所要時間の目安(分・日中・乗換込み)
+
+const LINES = [
+  {id:'ym', name:'JR山手線',        color:'#9ACD32'},
+  {id:'ch', name:'JR中央線快速',    color:'#F15A22'},
+  {id:'ke', name:'京王線',          color:'#E85298'},
+  {id:'od', name:'小田急線',        color:'#3A9AD9'},
+  {id:'ty', name:'東急東横線',      color:'#E8506E'},
+  {id:'dt', name:'東急田園都市線',  color:'#2CB9A0'},
+  {id:'sb', name:'西武池袋線',      color:'#FFAA00'},
+  {id:'tj', name:'東武東上線',      color:'#5B8DE0'},
+  {id:'sk', name:'JR埼京線・京浜東北線(北)', color:'#00AC84'},
+  {id:'jb', name:'JR常磐線',        color:'#00B261'},
+  {id:'so', name:'JR総武線',        color:'#FFD400'},
+  {id:'tx', name:'つくばエクスプレス', color:'#8FA8FF'},
+  {id:'kt', name:'JR京浜東北線(南)', color:'#00B2E5'},
+];
+
+const STATIONS = [
+  // ---- JR山手線 (30) ----
+  {id:'tokyo',    n:'東京',       lines:['ym'], lon:139.7671, lat:35.6812, rent:14.5, time:0, lx:10, ly:3.5},
+  {id:'yurakucho',n:'有楽町',     lines:['ym'], lon:139.7631, lat:35.6750, rent:15.4, time:2},
+  {id:'shimbashi',n:'新橋',       lines:['ym'], lon:139.7586, lat:35.6662, rent:13.5, time:4},
+  {id:'hamamatsucho',n:'浜松町',  lines:['ym'], lon:139.7572, lat:35.6554, rent:13.0, time:6},
+  {id:'tamachi',  n:'田町',       lines:['ym'], lon:139.7476, lat:35.6457, rent:13.2, time:8},
+  {id:'tgw',      n:'高輪ゲートウェイ', lines:['ym'], lon:139.7407, lat:35.6355, rent:13.0, time:9},
+  {id:'shinagawa',n:'品川',       lines:['ym','kt'], lon:139.7387, lat:35.6285, rent:13.0, time:0},
+  {id:'osaki',    n:'大崎',       lines:['ym'], lon:139.7285, lat:35.6197, rent:10.9, time:6, lx:8, ly:13},
+  {id:'gotanda',  n:'五反田',     lines:['ym'], lon:139.7237, lat:35.6264, rent:12.0, time:4},
+  {id:'meguro',   n:'目黒',       lines:['ym'], lon:139.7157, lat:35.6339, rent:12.5, time:6},
+  {id:'ebisu',    n:'恵比寿',     lines:['ym'], lon:139.7100, lat:35.6467, rent:13.5, time:3},
+  {id:'shibuya',  n:'渋谷',       lines:['ym','ty','dt'], lon:139.7016, lat:35.6580, rent:13.8, time:0, lx:10, ly:13},
+  {id:'harajuku', n:'原宿',       lines:['ym'], lon:139.7027, lat:35.6702, rent:12.8, time:2},
+  {id:'yoyogi',   n:'代々木',     lines:['ym'], lon:139.7020, lat:35.6830, rent:11.5, time:2},
+  {id:'shinjuku', n:'新宿',       lines:['ym','ch','ke','od','sk'], lon:139.7003, lat:35.6896, rent:11.5, time:0, lx:10, ly:-8},
+  {id:'shinokubo',n:'新大久保',   lines:['ym'], lon:139.7001, lat:35.7013, rent:10.2, time:2},
+  {id:'takadanobaba',n:'高田馬場',lines:['ym'], lon:139.7038, lat:35.7123, rent:10.4, time:4},
+  {id:'mejiro',   n:'目白',       lines:['ym'], lon:139.7064, lat:35.7212, rent:10.4, time:3},
+  {id:'ikebukuro',n:'池袋',       lines:['ym','sb','tj','sk'], lon:139.7109, lat:35.7295, rent:10.0, time:0, lx:10, ly:14},
+  {id:'otsuka',   n:'大塚',       lines:['ym'], lon:139.7282, lat:35.7311, rent:9.9,  time:4},
+  {id:'sugamo',   n:'巣鴨',       lines:['ym'], lon:139.7394, lat:35.7335, rent:10.9, time:6},
+  {id:'komagome', n:'駒込',       lines:['ym'], lon:139.7469, lat:35.7365, rent:11.0, time:8},
+  {id:'tabata',   n:'田端',       lines:['ym'], lon:139.7608, lat:35.7381, rent:9.8,  time:10},
+  {id:'nishinippori',n:'西日暮里',lines:['ym'], lon:139.7669, lat:35.7324, rent:10.0, time:8},
+  {id:'nippori',  n:'日暮里',     lines:['ym','jb'], lon:139.7708, lat:35.7278, rent:10.5, time:6, lx:8, ly:-7},
+  {id:'uguisudani',n:'鶯谷',      lines:['ym'], lon:139.7708, lat:35.7205, rent:10.8, time:2},
+  {id:'ueno',     n:'上野',       lines:['ym'], lon:139.7774, lat:35.7141, rent:11.2, time:0},
+  {id:'okachimachi',n:'御徒町',   lines:['ym'], lon:139.7745, lat:35.7076, rent:11.5, time:2},
+  {id:'akihabara',n:'秋葉原',     lines:['ym','so','tx'], lon:139.7731, lat:35.6984, rent:11.8, time:2, lx:9, ly:-8},
+  {id:'kanda',    n:'神田',       lines:['ym'], lon:139.7709, lat:35.6918, rent:12.5, time:2},
+
+  // ---- JR中央線快速 (新宿→高尾) ----
+  {id:'nakano',   n:'中野',       lines:['ch'], lon:139.6659, lat:35.7057, rent:8.7, time:5},
+  {id:'koenji',   n:'高円寺',     lines:['ch'], lon:139.6497, lat:35.7053, rent:8.0, time:7, lx:8, ly:13},
+  {id:'asagaya',  n:'阿佐ケ谷',   lines:['ch'], lon:139.6357, lat:35.7047, rent:7.9, time:9},
+  {id:'ogikubo',  n:'荻窪',       lines:['ch'], lon:139.6201, lat:35.7046, rent:8.4, time:11},
+  {id:'nishiogikubo',n:'西荻窪',  lines:['ch'], lon:139.5993, lat:35.7037, rent:7.9, time:13},
+  {id:'kichijoji',n:'吉祥寺',     lines:['ch'], lon:139.5798, lat:35.7033, rent:8.5, time:15},
+  {id:'mitaka',   n:'三鷹',       lines:['ch'], lon:139.5605, lat:35.7027, rent:8.2, time:17},
+  {id:'musashisakai',n:'武蔵境',  lines:['ch'], lon:139.5433, lat:35.7021, rent:7.6, time:20},
+  {id:'higashikoganei',n:'東小金井',lines:['ch'], lon:139.5245, lat:35.7014, rent:7.2, time:22},
+  {id:'musashikoganei',n:'武蔵小金井',lines:['ch'], lon:139.5062, lat:35.7008, rent:7.2, time:24},
+  {id:'kokubunji',n:'国分寺',     lines:['ch'], lon:139.4806, lat:35.7003, rent:7.3, time:21},
+  {id:'nishikokubunji',n:'西国分寺',lines:['ch'], lon:139.4664, lat:35.6997, rent:6.7, time:29},
+  {id:'kunitachi',n:'国立',       lines:['ch'], lon:139.4463, lat:35.6987, rent:6.9, time:31},
+  {id:'tachikawa',n:'立川',       lines:['ch'], lon:139.4138, lat:35.6987, rent:7.9, time:27},
+  {id:'hino',     n:'日野',       lines:['ch'], lon:139.3946, lat:35.6791, rent:6.7, time:35},
+  {id:'toyoda',   n:'豊田',       lines:['ch'], lon:139.3826, lat:35.6598, rent:6.3, time:38},
+  {id:'hachioji', n:'八王子',     lines:['ch'], lon:139.3390, lat:35.6555, rent:7.5, time:37},
+  {id:'nishihachioji',n:'西八王子',lines:['ch'], lon:139.3122, lat:35.6567, rent:6.0, time:45},
+  {id:'takao',    n:'高尾',       lines:['ch'], lon:139.2823, lat:35.6423, rent:5.8, time:44},
+
+  // ---- 京王線 (新宿→京王八王子) ----
+  {id:'sasazuka', n:'笹塚',       lines:['ke'], lon:139.6668, lat:35.6733, rent:9.0, time:4},
+  {id:'meidaimae',n:'明大前',     lines:['ke'], lon:139.6503, lat:35.6685, rent:8.3, time:7},
+  {id:'shimotakaido',n:'下高井戸',lines:['ke'], lon:139.6390, lat:35.6662, rent:8.0, time:9},
+  {id:'sakurajosui',n:'桜上水',   lines:['ke'], lon:139.6262, lat:35.6656, rent:7.8, time:11},
+  {id:'chitosekarasuyama',n:'千歳烏山',lines:['ke'], lon:139.6001, lat:35.6664, rent:7.5, time:14},
+  {id:'sengawa',  n:'仙川',       lines:['ke'], lon:139.5850, lat:35.6624, rent:7.6, time:18},
+  {id:'chofu',    n:'調布',       lines:['ke'], lon:139.5424, lat:35.6519, rent:7.2, time:16},
+  {id:'fuchu',    n:'府中',       lines:['ke'], lon:139.4776, lat:35.6720, rent:6.5, time:25},
+  {id:'seisekisakuragaoka',n:'聖蹟桜ヶ丘',lines:['ke'], lon:139.4468, lat:35.6501, rent:6.3, time:30},
+  {id:'takahatafudo',n:'高幡不動',lines:['ke'], lon:139.4108, lat:35.6614, rent:5.9, time:33},
+  {id:'keiohachioji',n:'京王八王子',lines:['ke'], lon:139.3436, lat:35.6572, rent:5.8, time:40},
+
+  // ---- 小田急線 (新宿→町田) ----
+  {id:'shimokitazawa',n:'下北沢', lines:['od'], lon:139.6668, lat:35.6613, rent:9.8, time:8},
+  {id:'kyodo',    n:'経堂',       lines:['od'], lon:139.6364, lat:35.6513, rent:8.5, time:12},
+  {id:'seijogakuenmae',n:'成城学園前',lines:['od'], lon:139.6002, lat:35.6404, rent:8.8, time:16},
+  {id:'komae',    n:'狛江',       lines:['od'], lon:139.5786, lat:35.6349, rent:7.7, time:20},
+  {id:'noborito', n:'登戸',       lines:['od'], lon:139.5700, lat:35.6205, rent:7.5, time:18},
+  {id:'mukogaokayuen',n:'向ヶ丘遊園',lines:['od'], lon:139.5623, lat:35.6180, rent:7.0, time:20},
+  {id:'shinyurigaoka',n:'新百合ヶ丘',lines:['od'], lon:139.5075, lat:35.6039, rent:7.0, time:25},
+  {id:'machida',  n:'町田',       lines:['od'], lon:139.4467, lat:35.5420, rent:6.4, time:33},
+
+  // ---- 東急東横線 (渋谷→横浜) ----
+  {id:'nakameguro',n:'中目黒',    lines:['ty'], lon:139.6989, lat:35.6441, rent:12.0, time:2},
+  {id:'gakugeidaigaku',n:'学芸大学',lines:['ty'], lon:139.6857, lat:35.6284, rent:9.8, time:6},
+  {id:'jiyugaoka',n:'自由が丘',   lines:['ty'], lon:139.6690, lat:35.6072, rent:9.5, time:9},
+  {id:'denenchofu',n:'田園調布',  lines:['ty'], lon:139.6673, lat:35.5983, rent:9.2, time:12},
+  {id:'tamagawa', n:'多摩川',     lines:['ty'], lon:139.6685, lat:35.5903, rent:9.0, time:14},
+  {id:'musashikosugi',n:'武蔵小杉',lines:['ty'], lon:139.6591, lat:35.5766, rent:8.9, time:12},
+  {id:'motosumiyoshi',n:'元住吉', lines:['ty'], lon:139.6535, lat:35.5637, rent:7.8, time:16},
+  {id:'hiyoshi',  n:'日吉',       lines:['ty'], lon:139.6467, lat:35.5530, rent:7.5, time:15},
+  {id:'tsunashima',n:'綱島',      lines:['ty'], lon:139.6343, lat:35.5365, rent:7.3, time:18},
+  {id:'kikuna',   n:'菊名',       lines:['ty'], lon:139.6300, lat:35.5096, rent:7.0, time:21},
+  {id:'hakuraku', n:'白楽',       lines:['ty'], lon:139.6260, lat:35.4881, rent:6.4, time:27},
+  {id:'yokohama', n:'横浜',       lines:['ty','kt'], lon:139.6220, lat:35.4660, rent:8.2, time:26},
+
+  // ---- 東急田園都市線 (渋谷→中央林間) ----
+  {id:'sangenjaya',n:'三軒茶屋',  lines:['dt'], lon:139.6712, lat:35.6437, rent:9.5, time:5},
+  {id:'komazawadaigaku',n:'駒沢大学',lines:['dt'], lon:139.6617, lat:35.6336, rent:9.0, time:7},
+  {id:'sakurashinmachi',n:'桜新町',lines:['dt'], lon:139.6474, lat:35.6280, rent:8.8, time:9},
+  {id:'yoga',     n:'用賀',       lines:['dt'], lon:139.6335, lat:35.6262, rent:8.6, time:11},
+  {id:'futakotamagawa',n:'二子玉川',lines:['dt'], lon:139.6266, lat:35.6117, rent:9.0, time:13},
+  {id:'mizonokuchi',n:'溝の口',   lines:['dt'], lon:139.6106, lat:35.5999, rent:7.5, time:14},
+  {id:'saginuma', n:'鷺沼',       lines:['dt'], lon:139.5780, lat:35.5804, rent:6.9, time:22},
+  {id:'tamaplaza',n:'たまプラーザ',lines:['dt'], lon:139.5595, lat:35.5768, rent:7.0, time:24},
+  {id:'azamino',  n:'あざみ野',   lines:['dt'], lon:139.5528, lat:35.5677, rent:6.8, time:26},
+  {id:'aobadai',  n:'青葉台',     lines:['dt'], lon:139.5176, lat:35.5432, rent:6.7, time:31},
+  {id:'nagatsuta',n:'長津田',     lines:['dt'], lon:139.4945, lat:35.5317, rent:6.2, time:35},
+  {id:'chuorinkan',n:'中央林間',  lines:['dt'], lon:139.4440, lat:35.5079, rent:5.9, time:41},
+
+  // ---- 西武池袋線 (池袋→所沢) ----
+  {id:'shiinamachi',n:'椎名町',   lines:['sb'], lon:139.6990, lat:35.7241, rent:8.2, time:3, lx:9, ly:13},
+  {id:'ekoda',    n:'江古田',     lines:['sb'], lon:139.6738, lat:35.7372, rent:7.8, time:6, lx:8, ly:-7},
+  {id:'nerima',   n:'練馬',       lines:['sb'], lon:139.6546, lat:35.7377, rent:8.0, time:8, lx:8, ly:13},
+  {id:'shakujiikoen',n:'石神井公園',lines:['sb'], lon:139.6062, lat:35.7433, rent:7.6, time:12},
+  {id:'hibarigaoka',n:'ひばりヶ丘',lines:['sb'], lon:139.5461, lat:35.7481, rent:6.7, time:17},
+  {id:'kiyose',   n:'清瀬',       lines:['sb'], lon:139.5186, lat:35.7690, rent:6.2, time:21},
+  {id:'tokorozawa',n:'所沢',      lines:['sb'], lon:139.4697, lat:35.7860, rent:6.3, time:23},
+
+  // ---- 東武東上線 (池袋→川越) ----
+  {id:'oyama',    n:'大山',       lines:['tj'], lon:139.6972, lat:35.7483, rent:8.0, time:5, lx:8, ly:13},
+  {id:'tokiwadai',n:'ときわ台',   lines:['tj'], lon:139.6797, lat:35.7582, rent:7.4, time:9, lx:8, ly:-7},
+  {id:'kamiitabashi',n:'上板橋',  lines:['tj'], lon:139.6645, lat:35.7663, rent:7.2, time:11, lx:8, ly:13},
+  {id:'narimasu', n:'成増',       lines:['tj'], lon:139.6335, lat:35.7770, rent:7.0, time:13, lx:8, ly:-7},
+  {id:'wakoshi',  n:'和光市',     lines:['tj'], lon:139.6125, lat:35.7890, rent:7.0, time:16},
+  {id:'asakadai', n:'朝霞台',     lines:['tj'], lon:139.5936, lat:35.8040, rent:6.4, time:22},
+  {id:'shiki',    n:'志木',       lines:['tj'], lon:139.5820, lat:35.8220, rent:6.3, time:25},
+  {id:'kawagoe',  n:'川越',       lines:['tj'], lon:139.4820, lat:35.9082, rent:6.0, time:30},
+
+  // ---- JR埼京線・京浜東北線(北) (池袋→大宮) ----
+  {id:'jujo',     n:'十条',       lines:['sk'], lon:139.7215, lat:35.7604, rent:8.0, time:5, lx:9, ly:-7},
+  {id:'akabane',  n:'赤羽',       lines:['sk'], lon:139.7210, lat:35.7780, rent:8.3, time:9, lx:8, ly:3.5},
+  {id:'todakoen', n:'戸田公園',   lines:['sk'], lon:139.6770, lat:35.8035, rent:6.8, time:17},
+  {id:'musashiurawa',n:'武蔵浦和',lines:['sk'], lon:139.6490, lat:35.8460, rent:7.0, time:20},
+  {id:'urawa',    n:'浦和',       lines:['sk'], lon:139.6570, lat:35.8590, rent:7.2, time:25},
+  {id:'omiya',    n:'大宮',       lines:['sk'], lon:139.6240, lat:35.9063, rent:7.0, time:26},
+
+  // ---- JR常磐線 (日暮里→柏) ----
+  {id:'mikawashima',n:'三河島',   lines:['jb'], lon:139.7798, lat:35.7326, rent:8.5, time:7, lx:8, ly:-7},
+  {id:'minamisenju',n:'南千住',   lines:['jb'], lon:139.7990, lat:35.7330, rent:8.0, time:8, lx:8, ly:13},
+  {id:'kitasenju',n:'北千住',     lines:['jb','tx'], lon:139.8050, lat:35.7490, rent:8.6, time:9, lx:8, ly:-8},
+  {id:'ayase',    n:'綾瀬',       lines:['jb'], lon:139.8250, lat:35.7620, rent:7.3, time:15},
+  {id:'kameari',  n:'亀有',       lines:['jb'], lon:139.8480, lat:35.7670, rent:7.0, time:17},
+  {id:'kanamachi',n:'金町',       lines:['jb'], lon:139.8710, lat:35.7680, rent:6.8, time:19},
+  {id:'matsudo',  n:'松戸',       lines:['jb'], lon:139.9010, lat:35.7840, rent:6.4, time:19},
+  {id:'kashiwa',  n:'柏',         lines:['jb'], lon:139.9710, lat:35.8620, rent:6.2, time:26},
+
+  // ---- JR総武線 (秋葉原→船橋) ----
+  {id:'asakusabashi',n:'浅草橋',  lines:['so'], lon:139.7860, lat:35.6985, rent:9.8, time:2},
+  {id:'ryogoku',  n:'両国',       lines:['so'], lon:139.7930, lat:35.6960, rent:9.5, time:4},
+  {id:'kinshicho',n:'錦糸町',     lines:['so'], lon:139.8140, lat:35.6965, rent:9.3, time:6},
+  {id:'kameido',  n:'亀戸',       lines:['so'], lon:139.8265, lat:35.6973, rent:8.8, time:8},
+  {id:'hirai',    n:'平井',       lines:['so'], lon:139.8420, lat:35.7058, rent:7.8, time:10},
+  {id:'shinkoiwa',n:'新小岩',     lines:['so'], lon:139.8570, lat:35.7170, rent:7.5, time:13},
+  {id:'koiwa',    n:'小岩',       lines:['so'], lon:139.8815, lat:35.7330, rent:7.0, time:16},
+  {id:'ichikawa', n:'市川',       lines:['so'], lon:139.9077, lat:35.7288, rent:6.8, time:19},
+  {id:'motoyawata',n:'本八幡',    lines:['so'], lon:139.9275, lat:35.7220, rent:6.9, time:21},
+  {id:'funabashi',n:'船橋',       lines:['so'], lon:139.9852, lat:35.7017, rent:6.6, time:24},
+
+  // ---- つくばエクスプレス (秋葉原→つくば) ----
+  {id:'asakusa_tx',n:'浅草',      lines:['tx'], lon:139.7925, lat:35.7100, rent:9.6, time:4},
+  {id:'rokucho',  n:'六町',       lines:['tx'], lon:139.8267, lat:35.7663, rent:7.3, time:15},
+  {id:'yashio',   n:'八潮',       lines:['tx'], lon:139.8355, lat:35.8090, rent:6.7, time:17},
+  {id:'misatochuo',n:'三郷中央',  lines:['tx'], lon:139.8720, lat:35.8230, rent:6.5, time:20},
+  {id:'minaminagareyama',n:'南流山',lines:['tx'], lon:139.8940, lat:35.8380, rent:6.8, time:25},
+  {id:'nagareyamaotakanomori',n:'流山おおたかの森',lines:['tx'], lon:139.9255, lat:35.8710, rent:7.2, time:25},
+  {id:'kashiwanoha',n:'柏の葉キャンパス',lines:['tx'], lon:139.9370, lat:35.8940, rent:6.9, time:30},
+
+  // ---- JR京浜東北線(南) (品川→横浜) ----
+  {id:'oimachi',  n:'大井町',     lines:['kt'], lon:139.7340, lat:35.6062, rent:9.5, time:3},
+  {id:'omori',    n:'大森',       lines:['kt'], lon:139.7280, lat:35.5885, rent:8.6, time:8},
+  {id:'kamata',   n:'蒲田',       lines:['kt'], lon:139.7160, lat:35.5625, rent:8.4, time:13},
+  {id:'kawasaki', n:'川崎',       lines:['kt'], lon:139.6970, lat:35.5310, rent:8.3, time:8},
+  {id:'tsurumi',  n:'鶴見',       lines:['kt'], lon:139.6790, lat:35.5087, rent:7.4, time:15},
+];
+
+const ROUTES = [
+  {line:'ym', loop:true, stations:['tokyo','yurakucho','shimbashi','hamamatsucho','tamachi','tgw','shinagawa','osaki','gotanda','meguro','ebisu','shibuya','harajuku','yoyogi','shinjuku','shinokubo','takadanobaba','mejiro','ikebukuro','otsuka','sugamo','komagome','tabata','nishinippori','nippori','uguisudani','ueno','okachimachi','akihabara','kanda']},
+  {line:'ch', stations:['shinjuku','nakano','koenji','asagaya','ogikubo','nishiogikubo','kichijoji','mitaka','musashisakai','higashikoganei','musashikoganei','kokubunji','nishikokubunji','kunitachi','tachikawa','hino','toyoda','hachioji','nishihachioji','takao']},
+  {line:'ke', stations:['shinjuku','sasazuka','meidaimae','shimotakaido','sakurajosui','chitosekarasuyama','sengawa','chofu','fuchu','seisekisakuragaoka','takahatafudo','keiohachioji']},
+  {line:'od', stations:['shinjuku','shimokitazawa','kyodo','seijogakuenmae','komae','noborito','mukogaokayuen','shinyurigaoka','machida']},
+  {line:'ty', stations:['shibuya','nakameguro','gakugeidaigaku','jiyugaoka','denenchofu','tamagawa','musashikosugi','motosumiyoshi','hiyoshi','tsunashima','kikuna','hakuraku','yokohama']},
+  {line:'dt', stations:['shibuya','sangenjaya','komazawadaigaku','sakurashinmachi','yoga','futakotamagawa','mizonokuchi','saginuma','tamaplaza','azamino','aobadai','nagatsuta','chuorinkan']},
+  {line:'sb', stations:['ikebukuro','shiinamachi','ekoda','nerima','shakujiikoen','hibarigaoka','kiyose','tokorozawa']},
+  {line:'tj', stations:['ikebukuro','oyama','tokiwadai','kamiitabashi','narimasu','wakoshi','asakadai','shiki','kawagoe']},
+  {line:'sk', stations:['ikebukuro','jujo','akabane','todakoen','musashiurawa','urawa','omiya']},
+  {line:'jb', stations:['nippori','mikawashima','minamisenju','kitasenju','ayase','kameari','kanamachi','matsudo','kashiwa']},
+  {line:'so', stations:['akihabara','asakusabashi','ryogoku','kinshicho','kameido','hirai','shinkoiwa','koiwa','ichikawa','motoyawata','funabashi']},
+  {line:'tx', stations:['akihabara','asakusa_tx','kitasenju','rokucho','yashio','misatochuo','minaminagareyama','nagareyamaotakanomori','kashiwanoha']},
+  {line:'kt', stations:['shinagawa','oimachi','omori','kamata','kawasaki','tsurumi','yokohama']},
+];
+
+</script>
+<script>
+// ===== 東京 家賃コスパ路線図 v2 (Leaflet + 地理院タイル) =====
+(function(){
+'use strict';
+
+const byId = {};
+STATIONS.forEach(s => byId[s.id] = s);
+const LINE = {};
+LINES.forEach(l => LINE[l.id] = l);
+
+// ---- コスパ計算 ----
+const mt = d3.mean(STATIONS, d => d.time);
+const mr = d3.mean(STATIONS, d => d.rent);
+let sxy = 0, sxx = 0;
+STATIONS.forEach(d => { sxy += (d.time - mt) * (d.rent - mr); sxx += (d.time - mt) ** 2; });
+const beta = sxy / sxx, alpha = mr - beta * mt;
+const expectedRent = t => alpha + beta * t;
+STATIONS.forEach(d => d.resid = +(d.rent - expectedRent(d.time)).toFixed(2));
+const ranked = STATIONS.slice().sort((a, b) => a.resid - b.resid);
+ranked.forEach((d, i) => d.cospaRank = i + 1);
+const TOP_N = 10;
+const topSet = new Set(ranked.slice(0, TOP_N).map(d => d.id));
+
+// ---- 擬似座標レイアウト (すべて緯度経度空間に統一) ----
+const CX = 139.735, CY = 35.685, KLON = Math.cos(35.65 * Math.PI / 180);
+let maxGeoR = 0, maxRentR = 0;
+const rentXY = {};
+STATIONS.forEach(d => {
+  const x = (d.lon - CX) * KLON, y = -(d.lat - CY);
+  maxGeoR = Math.max(maxGeoR, Math.hypot(x, y));
+  const th = Math.atan2(y, x), r = Math.max(0.4, 16.2 - d.rent);
+  rentXY[d.id] = { x: Math.cos(th) * r, y: Math.sin(th) * r };
+  maxRentR = Math.max(maxRentR, r);
+});
+const S = maxGeoR / maxRentR;
+const geoLL  = d => [d.lat, d.lon];
+const rentLL = d => [CY - rentXY[d.id].y * S, CX + rentXY[d.id].x * S / KLON];
+// チャート空間: x=時間 y=家賃 を地理範囲に射影
+const latMin = d3.min(STATIONS, d => d.lat), latMax = d3.max(STATIONS, d => d.lat);
+const lonMin = d3.min(STATIONS, d => d.lon), lonMax = d3.max(STATIONS, d => d.lon);
+const T0 = 0, T1 = 48, R0 = 5.2, R1 = 16;
+const chartLon = t => lonMin + (t - T0) / (T1 - T0) * (lonMax - lonMin);
+const chartLat = r => latMin + (r - R0) / (R1 - R0) * (latMax - latMin);
+const chartLL = d => [chartLat(d.rent), chartLon(d.time)];
+const LLS = { geo: geoLL, rent: rentLL, chart: chartLL };
+
+// ---- Leaflet ----
+const map = L.map('map', { zoomSnap: 0.25, zoomControl: true, attributionControl: true });
+L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png', {
+  maxZoom: 17, minZoom: 8,
+  attribution: '地図: <a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener">国土地理院(地理院タイル 淡色地図)</a>'
+}).addTo(map);
+const tilePane = d3.select(map.getPanes().tilePane);
+
+// ---- D3 オーバーレイ ----
+const svg = d3.select(map.getPanes().overlayPane).append('svg').attr('class', 'd3overlay');
+const g = svg.append('g').attr('class', 'leaflet-zoom-hide');
+const gAxes = g.append('g').attr('class', 'axes').attr('opacity', 0);
+const gRoutes = g.append('g');
+const gStations = g.append('g');
+const gLabels = g.append('g').style('pointer-events', 'none');
+
+// 現在位置(緯度経度)を保持し、モード切替でtween
+STATIONS.forEach(d => { const p = geoLL(d); d.cur = { lat: p[0], lon: p[1] }; });
+
+// ---- 要素生成 ----
+const lineGen = d3.line().x(p => p.x).y(p => p.y).curve(d3.curveCatmullRom.alpha(0.6));
+const lineGenC = d3.line().x(p => p.x).y(p => p.y).curve(d3.curveCatmullRomClosed.alpha(0.6));
+const routeSel = gRoutes.selectAll('path').data(ROUTES).join('path')
+  .attr('class', 'route').attr('stroke', r => LINE[r.line].color);
+
+const stSel = gStations.selectAll('g.st').data(STATIONS).join('g').attr('class', 'st');
+stSel.filter(d => topSet.has(d.id)).append('circle').attr('class', 'topring').attr('r', 10);
+stSel.append('circle').attr('class', 'dot')
+  .attr('r', d => d.lines.length > 1 ? 6 : 4.5)
+  .attr('stroke', d => d.lines.length > 1 ? '#ffffff' : LINE[d.lines[0]].color);
+stSel.append('title').text(d => d.n);
+
+const majors = new Set(['tokyo','shinjuku','shibuya','ikebukuro','ueno','shinagawa','akihabara','nippori',
+  'takao','keiohachioji','machida','yokohama','chuorinkan','tokorozawa','kawagoe','omiya','kashiwa',
+  'funabashi','kichijoji','tachikawa','musashikosugi','kitasenju','akabane','chofu','kawasaki']);
+const labSel = gLabels.selectAll('text').data(STATIONS).join('text')
+  .attr('class', d => 'lab' + (topSet.has(d.id) ? ' toplab' : '') + (majors.has(d.id) ? ' major' : ''))
+  .attr('x', d => d.lx ?? 8).attr('y', d => d.ly ?? 3.5)
+  .text(d => (topSet.has(d.id) ? `★${d.cospaRank} ` : '') + d.n);
+
+// ---- チャート軸 (擬似緯度経度空間に描画) ----
+const xTicks = d3.range(0, 46, 5), yTicks = d3.range(6, 17, 2);
+const axX = gAxes.selectAll('g.tx').data(xTicks).join('g').attr('class', 'tx');
+axX.append('line'); axX.append('text').text(t => t + '分').attr('text-anchor', 'middle');
+const axY = gAxes.selectAll('g.ty').data(yTicks).join('g').attr('class', 'ty');
+axY.append('line'); axY.append('text').text(r => r + '万').attr('text-anchor', 'end');
+const trend = gAxes.append('line').attr('class', 'trend');
+const trendLab = gAxes.append('text').attr('class', 'trendlab').text('家賃相場トレンド ↓より下は割安');
+const axTitleX = gAxes.append('text').attr('class', 'axlab').attr('text-anchor', 'middle').text('都心主要ターミナルへの所要時間(目安) →');
+const axTitleY = gAxes.append('text').attr('class', 'axlab').attr('text-anchor', 'middle').text('家賃相場(万円) ↑');
+
+// ---- 再描画 ----
+const PAD = 160;
+function lp(lat, lon) { return map.latLngToLayerPoint([lat, lon]); }
+function redraw() {
+  const pts = {};
+  STATIONS.forEach(d => pts[d.id] = lp(d.cur.lat, d.cur.lon));
+  const xs = Object.values(pts).map(p => p.x), ys = Object.values(pts).map(p => p.y);
+  const x0 = Math.min(...xs) - PAD, y0 = Math.min(...ys) - PAD;
+  const x1 = Math.max(...xs) + PAD, y1 = Math.max(...ys) + PAD;
+  svg.attr('width', x1 - x0).attr('height', y1 - y0)
+     .style('left', x0 + 'px').style('top', y0 + 'px');
+  g.attr('transform', `translate(${-x0},${-y0})`);
+  stSel.attr('transform', d => `translate(${pts[d.id].x},${pts[d.id].y})`);
+  labSel.attr('transform', d => `translate(${pts[d.id].x},${pts[d.id].y})`);
+  routeSel.attr('d', r => {
+    const p = r.stations.map(id => pts[id]);
+    return (r.loop ? lineGenC : lineGen)(p);
+  });
+  // 軸
+  const pTL = lp(chartLat(R1), chartLon(T0)), pBR = lp(chartLat(R0), chartLon(T1));
+  axX.attr('transform', t => { const p = lp(chartLat(R0), chartLon(t)); return `translate(${p.x},0)`; });
+  axX.select('line').attr('y1', pTL.y).attr('y2', pBR.y);
+  axX.select('text').attr('y', pBR.y + 20);
+  axY.attr('transform', r => { const p = lp(chartLat(r), chartLon(T0)); return `translate(0,${p.y})`; });
+  axY.select('line').attr('x1', pTL.x).attr('x2', pBR.x);
+  axY.select('text').attr('x', pTL.x - 10).attr('dy', 4);
+  const tEnd = Math.min(T1, (R0 + 0.2 - alpha) / beta);
+  const q0 = lp(chartLat(expectedRent(0)), chartLon(0)), q1 = lp(chartLat(expectedRent(tEnd)), chartLon(tEnd));
+  trend.attr('x1', q0.x).attr('y1', q0.y).attr('x2', q1.x).attr('y2', q1.y);
+  const qm = lp(chartLat(expectedRent(28)), chartLon(28));
+  trendLab.attr('x', qm.x).attr('y', qm.y - 14);
+  axTitleX.attr('x', (pTL.x + pBR.x) / 2).attr('y', pBR.y + 44);
+  axTitleY.attr('transform', `translate(${pTL.x - 52},${(pTL.y + pBR.y) / 2}) rotate(-90)`);
+}
+map.on('zoomend', () => { redraw(); updateLabelVis(); });
+
+function updateLabelVis() {
+  gLabels.classed('zoomed', mode !== 'chart' && map.getZoom() >= 12);
+}
+
+// ---- モード切替 ----
+let mode = 'geo';
+function boundsOf(llFn) {
+  return L.latLngBounds(STATIONS.map(d => llFn(d))).pad(0.06);
+}
+function setMode(m) {
+  mode = m;
+  d3.selectAll('.modebtn').classed('active', function() { return this.dataset.mode === m; });
+  d3.select('#modeNote').text(
+    m === 'geo'  ? '実際の地図の上に路線と駅を表示。「家賃マップ」に切り替えると家賃が安い駅ほど外へ飛び出します。'
+  : m === 'rent' ? '中心からの距離 = 家賃の高さ。薄く残る実際の地図と見比べて、外へ飛び出している駅が「穴場」です。'
+  : '右下ほど「近くて安い」。トレンド線より下の駅が割安です。');
+  map.fitBounds(boundsOf(LLS[m]), { animate: false });
+  redraw();
+  tilePane.transition().duration(900).style('opacity', m === 'geo' ? 1 : (m === 'rent' ? 0.25 : 0.04));
+  gAxes.transition().duration(900).attr('opacity', m === 'chart' ? 1 : 0);
+  gRoutes.transition().duration(m === 'chart' ? 500 : 900).attr('opacity', m === 'chart' ? 0 : 1);
+  gLabels.classed('chartmode', m === 'chart');
+  updateLabelVis();
+  const starts = STATIONS.map(d => ({ lat: d.cur.lat, lon: d.cur.lon }));
+  const ends = STATIONS.map(d => { const p = LLS[m](d); return { lat: p[0], lon: p[1] }; });
+  d3.select('#map').transition('morph').duration(1100).ease(d3.easeCubicInOut)
+    .tween('pos', () => tt => {
+      STATIONS.forEach((d, i) => {
+        d.cur.lat = starts[i].lat + (ends[i].lat - starts[i].lat) * tt;
+        d.cur.lon = starts[i].lon + (ends[i].lon - starts[i].lon) * tt;
+      });
+      redraw();
+    });
+}
+d3.selectAll('.modebtn').filter(function() { return !!this.dataset.mode; })
+  .on('click', function() { setMode(this.dataset.mode); });
+d3.select('#baseToggle').on('click', function() {
+  const light = document.body.classList.toggle('lightbase');
+  this.textContent = light ? '🌓 背景: ライト' : '🌓 背景: ダーク';
+});
+
+// ---- ツールチップ ----
+const tip = d3.select('#tooltip');
+stSel.on('pointerenter', function(ev, d) {
+  d3.select(this).select('.dot').attr('r', (d.lines.length > 1 ? 6 : 4.5) + 2);
+  const chips = d.lines.map(id => `<span class="chip" style="background:${LINE[id].color}"></span>${LINE[id].name}`).join('<br>');
+  const diff = d.resid;
+  const judge = diff <= -0.8 ? `<b class="good">相場より約${Math.abs(diff).toFixed(1)}万円 割安 ✨</b>`
+    : diff >= 0.8 ? `相場より約${diff.toFixed(1)}万円 高め`
+    : 'ほぼ相場どおり';
+  tip.style('display','block').html(
+    `<div class="tt-name">${topSet.has(d.id) ? '★穴場' + d.cospaRank + '位 ' : ''}${d.n}</div>` +
+    `<div class="tt-lines">${chips}</div>` +
+    `<div class="tt-row">家賃相場(シングル向け): <b>${d.rent.toFixed(1)}万円</b></div>` +
+    `<div class="tt-row">都心まで: <b>約${d.time}分</b></div>` +
+    `<div class="tt-row">${judge}</div>`);
+}).on('pointermove', ev => {
+  tip.style('left', Math.min(ev.clientX + 16, window.innerWidth - 250) + 'px')
+     .style('top', (ev.clientY + 16) + 'px');
+}).on('pointerleave', function(ev, d) {
+  d3.select(this).select('.dot').attr('r', d.lines.length > 1 ? 6 : 4.5);
+  tip.style('display','none');
+});
+
+// ---- 路線フィルタ ----
+const active = new Set(LINES.map(l => l.id));
+function applyFilter() {
+  routeSel.classed('dim', r => !active.has(r.line));
+  stSel.classed('dim', d => !d.lines.some(id => active.has(id)));
+  labSel.classed('dim', d => !d.lines.some(id => active.has(id)));
+  d3.selectAll('.legend-item').classed('off', function() { return !active.has(this.dataset.line); });
+}
+const legend = d3.select('#legend');
+LINES.forEach(l => {
+  legend.append('button')
+    .attr('class','legend-item').attr('data-line', l.id)
+    .html(`<span class="swatch" style="background:${l.color}"></span>${l.name}`)
+    .on('click', function() {
+      if (active.has(l.id) && active.size === 1) { LINES.forEach(x => active.add(x.id)); }
+      else if (active.has(l.id)) active.delete(l.id);
+      else active.add(l.id);
+      applyFilter();
+    });
+});
+
+// ---- ランキング / 一覧表 ----
+const rk = d3.select('#ranking');
+ranked.slice(0, TOP_N).forEach((d, i) => {
+  rk.append('div').attr('class','rk-item')
+    .html(`<span class="rk-no">${i + 1}</span><span class="rk-name">${d.n}</span>` +
+      `<span class="rk-detail">${d.rent.toFixed(1)}万円 / ${d.time}分<br><span class="good">相場より−${Math.abs(d.resid).toFixed(1)}万円</span></span>`)
+    .on('pointerenter', () => {
+      stSel.classed('hl', s => s.id === d.id);
+      labSel.classed('hl', s => s.id === d.id);
+    })
+    .on('pointerleave', () => { stSel.classed('hl', false); labSel.classed('hl', false); });
+});
+const tbody = d3.select('#datatable tbody');
+ranked.forEach(d => {
+  tbody.append('tr').html(
+    `<td>${d.cospaRank}</td><td>${d.n}</td>` +
+    `<td>${d.lines.map(id => LINE[id].name).join('・')}</td>` +
+    `<td>${d.rent.toFixed(1)}</td><td>${d.time}</td>` +
+    `<td class="${d.resid < 0 ? 'good' : ''}">${d.resid > 0 ? '+' : ''}${d.resid.toFixed(1)}</td>`);
+});
+
+applyFilter();
+map.fitBounds(boundsOf(geoLL), { animate: false });
+redraw();
+updateLabelVis();
+d3.select('#modeNote').text('実際の地図の上に路線と駅を表示。「家賃マップ」に切り替えると家賃が安い駅ほど外へ飛び出します。');
+})();
+
+</script>
+</body>
+</html>
