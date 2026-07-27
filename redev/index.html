@@ -166,7 +166,6 @@ const BASE_STYLE = {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a> / 建物: <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a>',
       maxzoom: 19,
     },
-    ofm: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' },
   },
   layers: [
     { id: 'bg', type: 'background', paint: { 'background-color': '#e9ebed' } },
@@ -179,17 +178,28 @@ function boot() {
   window.__map = map;
   map.addControl(new maplibregl.NavigationControl({ visualizePitch:true }), 'top-left');
   let inited = false;
-  const init = () => { if (inited) return; inited = true; try { onLoad(map); } catch(e) { console.error('init failed:', e); } };
+  const init = () => {
+    if (inited) return;
+    if (!map.isStyleLoaded()) { setTimeout(init, 400); return; }
+    inited = true;
+    try { onLoad(map); } catch(e) { console.error('init failed:', e); }
+  };
   map.on('style.load', init);
-  setTimeout(init, 3000); // 保険: どのイベントも来なくても初期化
+  setTimeout(init, 1500); // 保険: イベントを取りこぼしても初期化
   map.on('error', e => console.warn('map error:', e && e.error && e.error.message));
   document.getElementById('resetView').addEventListener('click', () => map.flyTo({ ...HOME, duration:1200 }));
   return Promise.resolve(map);
 }
 
-function onLoad(map) {
-  // 現在の街並み(OSM建物)を3D化 — OpenFreeMapベクターが読めた場合のみ
+// 現在の街並み(OSM建物)の3D化 — OpenFreeMapが応答した場合だけ後付け(失敗しても本体に影響なし)
+async function tryAddBuildings(map) {
   try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 5000);
+    const tj = await (await fetch('https://tiles.openfreemap.org/planet', { signal: ctrl.signal })).json();
+    clearTimeout(timer);
+    if (!tj.tiles) return;
+    map.addSource('ofm', { type:'vector', tiles: tj.tiles, minzoom: tj.minzoom || 0, maxzoom: tj.maxzoom || 14 });
     map.addLayer({
       id:'osm-3d', type:'fill-extrusion', source:'ofm', 'source-layer':'building', minzoom:13,
       paint:{
@@ -197,8 +207,11 @@ function onLoad(map) {
         'fill-extrusion-height':['coalesce',['get','render_height'],['get','height'],8],
         'fill-extrusion-base':['coalesce',['get','render_min_height'],0],
         'fill-extrusion-opacity':.75,
-      }});
-  } catch(e) { console.warn('osm-3d skipped:', e.message); }
+      }}, 'redev-ghost');
+  } catch(e) { console.warn('周辺建物3Dはスキップ:', e.message); }
+}
+
+function onLoad(map) {
   map.addSource('redev', { type:'geojson', data:FC });
   // 未来分のゴースト(まだ年が来ていない計画)
   map.addLayer({ id:'redev-ghost', type:'line', source:'redev',
@@ -211,6 +224,7 @@ function onLoad(map) {
       'fill-extrusion-opacity':.82,
     }});
   applyFilter(map);
+  tryAddBuildings(map);
 
   map.on('click', 'redev-3d', ev => openPopup(map, ev.features[0], ev.lngLat));
   map.on('click', 'redev-ghost', ev => openPopup(map, ev.features[0], ev.lngLat));
