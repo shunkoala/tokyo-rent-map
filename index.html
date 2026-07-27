@@ -6,106 +6,144 @@
 <title>東京 家賃コスパ路線図 — 家賃で歪む東京の地図</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
-  :root { color-scheme: dark; }
+  :root {
+    color-scheme: light;
+    --bg: #f8f9fa;
+    --surface: #ffffff;
+    --ink: #202124;
+    --ink-2: #5f6368;
+    --ink-3: #80868b;
+    --border: rgba(60,64,67,.16);
+    --shadow: 0 1px 2px rgba(60,64,67,.3), 0 1px 3px 1px rgba(60,64,67,.15);
+    --accent: #1a73e8;
+    --accent-bg: #e8f0fe;
+    --good: #188038;
+    --grid: #e8eaed;
+    --map-bg: #e5e3df;
+    --casing: rgba(255,255,255,.92);
+    --halo: rgba(255,255,255,.9);
+    --dot-fill: #ffffff;
+    --hover: #f1f3f4;
+  }
+  body.dark {
+    color-scheme: dark;
+    --bg: #0d0d0d;
+    --surface: #1a1a19;
+    --ink: #ffffff;
+    --ink-2: #c3c2b7;
+    --ink-3: #898781;
+    --border: rgba(255,255,255,.14);
+    --shadow: 0 2px 8px rgba(0,0,0,.5);
+    --accent: #8ab4f8;
+    --accent-bg: #2e3b52;
+    --good: #34a853;
+    --grid: #2c2c2a;
+    --map-bg: #1a1a19;
+    --casing: rgba(20,20,19,.9);
+    --halo: rgba(13,13,13,.85);
+    --dot-fill: #202124;
+    --hover: #2a2a28;
+  }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
-    background: #0d0d0d; color: #ffffff;
-    font-family: system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif;
+    background: var(--bg); color: var(--ink);
+    font-family: Roboto, system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif;
     min-height: 100vh; padding: 18px 22px 30px;
   }
-  header h1 { font-size: 22px; font-weight: 700; letter-spacing: .02em; }
-  header .sub { color: #c3c2b7; font-size: 13px; margin-top: 4px; }
+  header h1 { font-size: 22px; font-weight: 700; letter-spacing: .01em; }
+  header .sub { color: var(--ink-2); font-size: 13px; margin-top: 4px; }
   .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 14px 0 10px; }
   .modebtn {
-    background: #1a1a19; color: #c3c2b7; border: 1px solid rgba(255,255,255,.14);
-    border-radius: 8px; padding: 7px 14px; font-size: 13px; cursor: pointer;
+    background: var(--surface); color: var(--ink-2); border: 1px solid var(--border);
+    border-radius: 999px; padding: 8px 16px; font-size: 13px; cursor: pointer;
+    box-shadow: var(--shadow); font-family: inherit;
   }
-  .modebtn:hover { color: #fff; border-color: rgba(255,255,255,.3); }
-  .modebtn.active { background: #2e2e2c; color: #fff; border-color: rgba(255,255,255,.45); font-weight: 700; }
-  #modeNote { color: #898781; font-size: 12px; margin-left: 6px; }
+  .modebtn:hover { background: var(--hover); color: var(--ink); }
+  .modebtn.active { background: var(--accent-bg); color: var(--accent); border-color: transparent; font-weight: 700; }
+  #modeNote { color: var(--ink-3); font-size: 12px; margin-left: 6px; }
   .layout { display: flex; gap: 16px; align-items: stretch; }
   .mapwrap {
-    flex: 1 1 auto; min-width: 0; background: #1a1a19;
-    border: 1px solid rgba(255,255,255,.10); border-radius: 12px; position: relative; overflow: hidden;
+    flex: 1 1 auto; min-width: 0; background: var(--map-bg);
+    border: 1px solid var(--border); border-radius: 14px; position: relative; overflow: hidden;
+    box-shadow: var(--shadow);
   }
-  #map { width: 100%; height: 74vh; min-height: 540px; background: #1a1a19; }
-  /* 地理院タイル(淡色)をダーク化 */
-  .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.92) contrast(.88) saturate(.55); }
-  body.lightbase .leaflet-tile-pane { filter: none; }
-  body.lightbase .lab { fill: #1f1e1b; stroke: rgba(252,252,251,.88); }
-  body.lightbase .lab.major, body.lightbase .lab.toplab, body.lightbase .lab.hl { fill: #0b0b0b; }
-  body.lightbase .st .dot { fill: #fcfcfb; }
-  body.lightbase .topring { stroke: #0b0b0b; }
-  body.lightbase .st.hl .dot { stroke: #0b0b0b; }
-  body.lightbase #map { background: #f0efec; }
-  .leaflet-control-attribution { background: rgba(13,13,13,.75); color: #898781; font-size: 10px; }
-  .leaflet-control-attribution a { color: #c3c2b7; }
-  .leaflet-control-zoom a { background: #1a1a19; color: #c3c2b7; border-color: rgba(255,255,255,.15); }
-  .leaflet-control-zoom a:hover { background: #2e2e2c; color: #fff; }
+  #map { width: 100%; height: 74vh; min-height: 540px; background: var(--map-bg); }
+  body.dark .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.92) contrast(.88) saturate(.55); }
+  .leaflet-control-attribution { background: rgba(255,255,255,.75); color: var(--ink-3); font-size: 10px; }
+  body.dark .leaflet-control-attribution { background: rgba(13,13,13,.75); }
+  .leaflet-control-attribution a { color: var(--ink-2); }
+  .leaflet-control-zoom a { background: var(--surface); color: var(--ink-2); border-color: var(--border); }
+  .leaflet-control-zoom a:hover { background: var(--hover); color: var(--ink); }
   .d3overlay { position: absolute; pointer-events: none; }
   aside {
-    width: 240px; flex: 0 0 240px; background: #1a1a19;
-    border: 1px solid rgba(255,255,255,.10); border-radius: 12px; padding: 14px;
-    display: flex; flex-direction: column; gap: 6px;
+    width: 244px; flex: 0 0 244px; background: var(--surface);
+    border: 1px solid var(--border); border-radius: 14px; padding: 14px;
+    display: flex; flex-direction: column; gap: 6px; box-shadow: var(--shadow);
   }
   aside h2 { font-size: 14px; margin-bottom: 4px; }
-  aside .note { color: #898781; font-size: 11px; margin-bottom: 6px; }
+  aside .note { color: var(--ink-3); font-size: 11px; margin-bottom: 6px; }
   .rk-item {
     display: grid; grid-template-columns: 24px 1fr auto; gap: 6px; align-items: center;
     padding: 6px 6px; border-radius: 8px; cursor: default; font-size: 12.5px;
   }
-  .rk-item:hover { background: #2a2a28; }
-  .rk-no { color: #898781; font-weight: 700; text-align: right; }
+  .rk-item:hover { background: var(--hover); }
+  .rk-no { color: var(--ink-3); font-weight: 700; text-align: right; }
   .rk-name { font-weight: 700; }
-  .rk-detail { color: #c3c2b7; font-size: 11px; text-align: right; line-height: 1.35; }
-  .good { color: #0ca30c; font-weight: 700; }
+  .rk-detail { color: var(--ink-2); font-size: 11px; text-align: right; line-height: 1.35; }
+  .good { color: var(--good); font-weight: 700; }
   #legend { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 4px; }
   .legend-item {
     display: inline-flex; align-items: center; gap: 6px;
-    background: #1a1a19; border: 1px solid rgba(255,255,255,.12); border-radius: 999px;
-    color: #c3c2b7; font-size: 11.5px; padding: 4px 10px; cursor: pointer;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 999px;
+    color: var(--ink-2); font-size: 11.5px; padding: 4px 10px; cursor: pointer; font-family: inherit;
   }
-  .legend-item:hover { color: #fff; }
+  .legend-item:hover { color: var(--ink); background: var(--hover); }
   .legend-item.off { opacity: .35; }
   .swatch { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
-  .route { fill: none; stroke-width: 3.5; stroke-linecap: round; stroke-opacity: .85; }
+  .casing { fill: none; stroke: var(--casing); stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; }
+  .casing.dim { opacity: 0; }
+  .route { fill: none; stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; stroke-opacity: .95; }
   .route.dim { stroke-opacity: .06; }
-  .st .dot { fill: #1a1a19; stroke-width: 2; pointer-events: auto; cursor: pointer; }
+  .st .dot { fill: var(--dot-fill); stroke-width: 2.5; pointer-events: auto; cursor: pointer; }
+  .st .dot.ic { stroke: var(--ink); }
   .st.dim { opacity: .12; }
-  .st.hl .dot { stroke: #fff; stroke-width: 3.5; }
-  .topring { fill: none; stroke: #ffffff; stroke-width: 1.2; stroke-dasharray: 3 2.5; opacity: .9; }
-  .lab { fill: #e8e6df; font-size: 11px; paint-order: stroke; stroke: rgba(13,13,13,.85); stroke-width: 3px; opacity: 0; }
-  .lab.major, .lab.toplab { opacity: 1; fill: #fff; }
+  .st.hl .dot { stroke-width: 4; }
+  .topring { fill: none; stroke: var(--ink); stroke-width: 1.2; stroke-dasharray: 3 2.5; opacity: .85; }
+  .lab {
+    fill: var(--ink-2); font-size: 11px; font-weight: 500;
+    paint-order: stroke; stroke: var(--halo); stroke-width: 3px; opacity: 0;
+  }
+  .lab.major, .lab.toplab { opacity: 1; fill: var(--ink); }
   .lab.toplab { font-weight: 700; }
   .zoomed .lab { opacity: 1; }
   .chartmode .lab { opacity: 0; }
   .chartmode .lab.toplab, .chartmode .lab.major { opacity: 1; }
   .lab.dim { opacity: 0 !important; }
-  .lab.hl { fill: #fff; font-weight: 700; opacity: 1; }
-  .axes text { fill: #898781; font-size: 11px; }
-  .axes .axlab { fill: #c3c2b7; font-size: 12px; }
-  .axes line { stroke: #2c2c2a; }
-  .axes .trend { stroke: #898781; stroke-dasharray: 6 4; stroke-width: 1.5; }
-  .axes .trendlab { fill: #c3c2b7; font-size: 11px; }
+  .lab.hl { fill: var(--ink); font-weight: 700; opacity: 1; }
+  .axes text { fill: var(--ink-3); font-size: 11px; }
+  .axes .axlab { fill: var(--ink-2); font-size: 12px; }
+  .axes line { stroke: var(--grid); }
+  .axes .trend { stroke: var(--ink-3); stroke-dasharray: 6 4; stroke-width: 1.5; }
+  .axes .trendlab { fill: var(--ink-2); font-size: 11px; paint-order: stroke; stroke: var(--halo); stroke-width: 3px; }
   #tooltip {
     position: fixed; display: none; pointer-events: none; z-index: 2000;
-    background: #262624; border: 1px solid rgba(255,255,255,.16); border-radius: 10px;
-    padding: 10px 12px; font-size: 12px; color: #c3c2b7; max-width: 230px;
-    box-shadow: 0 6px 24px rgba(0,0,0,.5);
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 12px; font-size: 12px; color: var(--ink-2); max-width: 230px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.25);
   }
-  .tt-name { color: #fff; font-weight: 700; font-size: 13.5px; margin-bottom: 4px; }
+  .tt-name { color: var(--ink); font-weight: 700; font-size: 13.5px; margin-bottom: 4px; }
   .tt-lines { font-size: 11px; margin-bottom: 6px; line-height: 1.5; }
   .tt-row { margin-top: 2px; }
-  .tt-row b { color: #fff; }
+  .tt-row b { color: var(--ink); }
   .chip { width: 9px; height: 9px; display: inline-block; border-radius: 2px; margin-right: 5px; }
   details { margin-top: 16px; }
-  summary { cursor: pointer; color: #c3c2b7; font-size: 13px; }
+  summary { cursor: pointer; color: var(--ink-2); font-size: 13px; }
   #datatable { border-collapse: collapse; margin-top: 10px; font-size: 12px; width: 100%; max-width: 820px; }
-  #datatable th, #datatable td { padding: 5px 10px; text-align: left; border-bottom: 1px solid #2c2c2a; }
-  #datatable th { color: #898781; font-weight: 600; }
-  #datatable td { color: #c3c2b7; font-variant-numeric: tabular-nums; }
-  footer { margin-top: 18px; color: #898781; font-size: 11px; line-height: 1.7; max-width: 900px; }
-  footer a { color: #898781; }
+  #datatable th, #datatable td { padding: 5px 10px; text-align: left; border-bottom: 1px solid var(--grid); }
+  #datatable th { color: var(--ink-3); font-weight: 600; }
+  #datatable td { color: var(--ink-2); font-variant-numeric: tabular-nums; }
+  footer { margin-top: 18px; color: var(--ink-3); font-size: 11px; line-height: 1.7; max-width: 900px; }
+  footer a { color: var(--ink-3); }
   @media (max-width: 900px) {
     .layout { flex-direction: column; }
     aside { width: 100%; flex: none; }
@@ -123,7 +161,7 @@
   <button class="modebtn active" data-mode="geo">🗺️ 実際の地図</button>
   <button class="modebtn" data-mode="rent">💴 家賃マップ</button>
   <button class="modebtn" data-mode="chart">📊 時間×家賃チャート</button>
-  <button class="modebtn" id="baseToggle" title="背景地図の配色を切り替え">🌓 背景: ダーク</button>
+  <button class="modebtn" id="baseToggle" title="背景地図を切り替え">🗾 背景: 標準</button>
   <span id="modeNote"></span>
 </div>
 
@@ -149,7 +187,7 @@
 </details>
 
 <footer>
-  <b>データについて</b> — 家賃は駅ごとのシングル向け(ワンルーム・1K・1DK)家賃相場の<b>目安</b>で、SUUMOジャーナル/リクルート公表の駅別家賃相場ランキング(2025〜2026年)、CHINTAI・Yahoo!不動産の駅別相場ページなど公開情報をもとにした推定値です。所要時間は東京・新宿・渋谷・池袋・上野・品川のうち最寄りターミナルへの日中の目安(乗換込み)。個々の物件の家賃や実際の所要時間とは異なります。路線は主要13路線・約160駅を収録(各駅停車のみの駅など一部省略)。背景地図は国土地理院「地理院タイル(淡色地図)」を色調変換して使用しています。
+  <b>データについて</b> — 家賃は駅ごとのシングル向け(ワンルーム・1K・1DK)家賃相場の<b>目安</b>で、SUUMOジャーナル/リクルート公表の駅別家賃相場ランキング(2025〜2026年)、CHINTAI・Yahoo!不動産の駅別相場ページなど公開情報をもとにした推定値です。所要時間は東京・新宿・渋谷・池袋・上野・品川のうち最寄りターミナルへの日中の目安(乗換込み)。個々の物件の家賃や実際の所要時間とは異なります。路線は主要13路線・約160駅を収録(各駅停車のみの駅など一部省略)。背景地図は「標準」= © OpenStreetMap contributors, © CARTO、「淡色/ダーク」= 国土地理院「地理院タイル(淡色地図)」(ダークは色調変換)を使用しています。
 </footer>
 
 <div id="tooltip"></div>
@@ -173,8 +211,8 @@ const LINES = [
   {id:'tj', name:'東武東上線',      color:'#5B8DE0'},
   {id:'sk', name:'JR埼京線・京浜東北線(北)', color:'#00AC84'},
   {id:'jb', name:'JR常磐線',        color:'#00B261'},
-  {id:'so', name:'JR総武線',        color:'#FFD400'},
-  {id:'tx', name:'つくばエクスプレス', color:'#8FA8FF'},
+  {id:'so', name:'JR総武線',        color:'#EFC000'},
+  {id:'tx', name:'つくばエクスプレス', color:'#4D6FD1'},
   {id:'kt', name:'JR京浜東北線(南)', color:'#00B2E5'},
 ];
 
@@ -414,10 +452,30 @@ const LLS = { geo: geoLL, rent: rentLL, chart: chartLL };
 
 // ---- Leaflet ----
 const map = L.map('map', { zoomSnap: 0.25, zoomControl: true, attributionControl: true });
-L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png', {
-  maxZoom: 17, minZoom: 8,
-  attribution: '地図: <a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener">国土地理院(地理院タイル 淡色地図)</a>'
-}).addTo(map);
+const GSI_ATTR = '地図: <a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener">国土地理院(地理院タイル 淡色地図)</a>';
+const BASEMAPS = {
+  voyager: { label: '🗾 背景: 標準', dark: false,
+    layer: L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+      maxZoom: 17, minZoom: 8, subdomains: 'abcd',
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>' }) },
+  pale: { label: '🗾 背景: 淡色(地理院)', dark: false,
+    layer: L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png', { maxZoom: 17, minZoom: 8, attribution: GSI_ATTR }) },
+  dark: { label: '🗾 背景: ダーク', dark: true,
+    layer: L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png', { maxZoom: 17, minZoom: 8, attribution: GSI_ATTR }) },
+};
+const BASE_ORDER = ['voyager', 'pale', 'dark'];
+let baseKey = 'voyager';
+BASEMAPS.voyager.layer.addTo(map);
+function setBase(key) {
+  map.removeLayer(BASEMAPS[baseKey].layer);
+  baseKey = key;
+  BASEMAPS[key].layer.addTo(map);
+  document.body.classList.toggle('dark', BASEMAPS[key].dark);
+  document.getElementById('baseToggle').textContent = BASEMAPS[key].label;
+}
+document.getElementById('baseToggle').addEventListener('click', () => {
+  setBase(BASE_ORDER[(BASE_ORDER.indexOf(baseKey) + 1) % BASE_ORDER.length]);
+});
 const tilePane = d3.select(map.getPanes().tilePane);
 
 // ---- D3 オーバーレイ ----
@@ -434,14 +492,16 @@ STATIONS.forEach(d => { const p = geoLL(d); d.cur = { lat: p[0], lon: p[1] }; })
 // ---- 要素生成 ----
 const lineGen = d3.line().x(p => p.x).y(p => p.y).curve(d3.curveCatmullRom.alpha(0.6));
 const lineGenC = d3.line().x(p => p.x).y(p => p.y).curve(d3.curveCatmullRomClosed.alpha(0.6));
-const routeSel = gRoutes.selectAll('path').data(ROUTES).join('path')
+const casingSel = gRoutes.selectAll('path.casing').data(ROUTES).join('path').attr('class', 'casing');
+const routeSel = gRoutes.selectAll('path.route').data(ROUTES).join('path')
   .attr('class', 'route').attr('stroke', r => LINE[r.line].color);
 
 const stSel = gStations.selectAll('g.st').data(STATIONS).join('g').attr('class', 'st');
 stSel.filter(d => topSet.has(d.id)).append('circle').attr('class', 'topring').attr('r', 10);
-stSel.append('circle').attr('class', 'dot')
+stSel.append('circle')
+  .attr('class', d => 'dot' + (d.lines.length > 1 ? ' ic' : ''))
   .attr('r', d => d.lines.length > 1 ? 6 : 4.5)
-  .attr('stroke', d => d.lines.length > 1 ? '#ffffff' : LINE[d.lines[0]].color);
+  .attr('stroke', d => d.lines.length > 1 ? null : LINE[d.lines[0]].color);
 stSel.append('title').text(d => d.n);
 
 const majors = new Set(['tokyo','shinjuku','shibuya','ikebukuro','ueno','shinagawa','akihabara','nippori',
@@ -477,10 +537,13 @@ function redraw() {
   g.attr('transform', `translate(${-x0},${-y0})`);
   stSel.attr('transform', d => `translate(${pts[d.id].x},${pts[d.id].y})`);
   labSel.attr('transform', d => `translate(${pts[d.id].x},${pts[d.id].y})`);
-  routeSel.attr('d', r => {
+  const routeD = {};
+  ROUTES.forEach(r => {
     const p = r.stations.map(id => pts[id]);
-    return (r.loop ? lineGenC : lineGen)(p);
+    routeD[r.line] = (r.loop ? lineGenC : lineGen)(p);
   });
+  casingSel.attr('d', r => routeD[r.line]);
+  routeSel.attr('d', r => routeD[r.line]);
   // 軸
   const pTL = lp(chartLat(R1), chartLon(T0)), pBR = lp(chartLat(R0), chartLon(T1));
   axX.attr('transform', t => { const p = lp(chartLat(R0), chartLon(t)); return `translate(${p.x},0)`; });
@@ -535,10 +598,6 @@ function setMode(m) {
 }
 d3.selectAll('.modebtn').filter(function() { return !!this.dataset.mode; })
   .on('click', function() { setMode(this.dataset.mode); });
-d3.select('#baseToggle').on('click', function() {
-  const light = document.body.classList.toggle('lightbase');
-  this.textContent = light ? '🌓 背景: ライト' : '🌓 背景: ダーク';
-});
 
 // ---- ツールチップ ----
 const tip = d3.select('#tooltip');
@@ -567,6 +626,7 @@ stSel.on('pointerenter', function(ev, d) {
 const active = new Set(LINES.map(l => l.id));
 function applyFilter() {
   routeSel.classed('dim', r => !active.has(r.line));
+  casingSel.classed('dim', r => !active.has(r.line));
   stSel.classed('dim', d => !d.lines.some(id => active.has(id)));
   labSel.classed('dim', d => !d.lines.some(id => active.has(id)));
   d3.selectAll('.legend-item').classed('off', function() { return !active.has(this.dataset.line); });
