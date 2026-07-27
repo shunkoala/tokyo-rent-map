@@ -4,6 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>東京再開発 3Dマップ — 未来の東京が生えてくる地図</title>
+<meta property="og:title" content="東京再開発 3Dマップ | Tokyo Map Lab">
+<meta property="og:description" content="Torch Towerから築地スタジアム構想まで、東京の主要再開発26件を3Dで一望。年スライダーを動かすと未来の超高層ビルが生えてきます。PLATEAU実形状ビル表示対応。">
+<meta property="og:image" content="https://shunkoala.github.io/tokyo-map-lab/assets/og-redev.jpg">
+<meta property="og:url" content="https://shunkoala.github.io/tokyo-map-lab/redev/">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.css">
 <style>
   :root {
@@ -68,6 +74,11 @@
   .pp-row { font-size: 12px; color: var(--ink-2); margin-top: 2px; }
   .pp-row b { color: var(--ink); }
   .pp-note { font-size: 11px; color: var(--ink-3); margin-top: 6px; line-height: 1.5; }
+  .pp-gauge { height: 6px; background: var(--hover); border-radius: 3px; margin-top: 8px; overflow: hidden; }
+  .pp-gauge > div { height: 100%; border-radius: 3px; }
+  .pp-vs { font-size: 10.5px; color: var(--ink-3); margin-top: 3px; }
+  .pp-link { display: inline-block; margin-top: 8px; font-size: 12px; color: var(--accent); text-decoration: none; font-weight: 700; }
+  .card-btn.on { background: var(--accent-bg); color: var(--accent); border-color: transparent; font-weight: 700; }
   footer { margin-top: 16px; color: var(--ink-3); font-size: 11px; line-height: 1.7; max-width: 960px; }
   @media (max-width: 900px) {
     .layout { flex-direction: column; }
@@ -90,6 +101,7 @@
   <button class="card-btn" data-st="plan"><span class="dotc" style="background:var(--c-plan)"></span>計画中</button>
   <button class="card-btn" data-st="review"><span class="dotc" style="background:var(--c-review)"></span>見直し中</button>
   <button class="card-btn" id="resetView">🎥 視点リセット</button>
+  <button class="card-btn" id="plateauBtn" title="国土交通省PLATEAUの実形状3D都市モデルを重ねる">🏙️ 実形状ビル(PLATEAU)</button>
   <span id="hint"></span>
 </div>
 
@@ -103,7 +115,7 @@
 </div>
 
 <footer>
-  <b>データについて</b> — 収録した再開発プロジェクトの高さ・階数・竣工予定は、事業者の公表資料や報道をもとにした<b>2026年7月時点の目安</b>です。計画は変更・延期されることがあります。ビルの形状は敷地位置に置いた簡略モデルで、実際の意匠とは異なります。周囲の現在の街並みはOpenStreetMapの建物データを立体化したものです。地図: © OpenStreetMap contributors, © OpenFreeMap。
+  <b>データについて</b> — 収録した再開発プロジェクトの高さ・階数・竣工予定は、事業者の公表資料や報道をもとにした<b>2026年7月時点の目安</b>です。計画は変更・延期されることがあります。ビルの形状は敷地位置に置いた簡略モデルで、実際の意匠とは異なります。周囲の現在の街並みはOpenStreetMapの建物データを立体化したもの、「実形状ビル」は国土交通省 <a href="https://www.mlit.go.jp/plateau/" target="_blank" rel="noopener">Project PLATEAU</a> の3D都市モデル(東京都 建築物LOD1)を使用しています。地図: © OpenStreetMap contributors, © CARTO, © OpenFreeMap。
 </footer>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.js"></script>
@@ -112,26 +124,32 @@
 // ===== 再開発プロジェクトデータ (2026年7月時点の目安) =====
 // h: 高さm / f: 階数 / y: 竣工(予定)年 / st: done|const|plan|review / w,d,rot: 簡略フットプリント(m,deg)
 const PROJECTS = [
-  {id:'azabudai', n:'麻布台ヒルズ 森JPタワー', area:'虎ノ門・麻布台', lat:35.6595, lon:139.7447, h:330, f:64, y:2023, st:'done', dev:'森ビル', w:70, d:70, rot:20, note:'日本一の高さ(現時点)。オフィス・住宅・商業の複合「ヒルズの未来形」。'},
-  {id:'toranomon_st', n:'虎ノ門ヒルズ ステーションタワー', area:'虎ノ門・麻布台', lat:35.6672, lon:139.7495, h:266, f:49, y:2023, st:'done', dev:'森ビル', w:60, d:60, rot:0, note:'日比谷線虎ノ門ヒルズ駅直結。'},
-  {id:'yaesu_mt', n:'東京ミッドタウン八重洲', area:'東京駅周辺', lat:35.6795, lon:139.7690, h:240, f:45, y:2023, st:'done', dev:'三井不動産', w:60, d:80, rot:0, note:'東京駅前。小学校を含む複合ビル。'},
-  {id:'sakura_stage', n:'渋谷サクラステージ', area:'渋谷', lat:35.6560, lon:139.7024, h:179, f:39, y:2023, st:'done', dev:'東急不動産', w:55, d:70, rot:-25, note:'桜丘口の大規模複合。渋谷駅と歩行者デッキ接続。'},
-  {id:'kabukicho', n:'東急歌舞伎町タワー', area:'新宿', lat:35.6952, lon:139.7015, h:225, f:48, y:2023, st:'done', dev:'東急・東急レク', w:45, d:45, rot:0, note:'ホテル×エンタメの超高層。'},
-  {id:'takanawa_gw', n:'高輪ゲートウェイシティ', area:'品川・高輪', lat:35.6365, lon:139.7405, h:161, f:30, y:2025, st:'done', dev:'JR東日本', w:70, d:130, rot:-15, note:'THE LINKPILLAR 1。車両基地跡の新街区、2025年開業。'},
+  {id:'azabudai', url:'https://www.azabudai-hills.com/', n:'麻布台ヒルズ 森JPタワー', area:'虎ノ門・麻布台', lat:35.6595, lon:139.7447, h:330, f:64, y:2023, st:'done', dev:'森ビル', w:70, d:70, rot:20, note:'日本一の高さ(現時点)。オフィス・住宅・商業の複合「ヒルズの未来形」。'},
+  {id:'toranomon_st', url:'https://www.toranomonhills.com/', n:'虎ノ門ヒルズ ステーションタワー', area:'虎ノ門・麻布台', lat:35.6672, lon:139.7495, h:266, f:49, y:2023, st:'done', dev:'森ビル', w:60, d:60, rot:0, note:'日比谷線虎ノ門ヒルズ駅直結。'},
+  {id:'yaesu_mt', url:'https://www.yaesu.tokyo-midtown.com/', n:'東京ミッドタウン八重洲', area:'東京駅周辺', lat:35.6795, lon:139.7690, h:240, f:45, y:2023, st:'done', dev:'三井不動産', w:60, d:80, rot:0, note:'東京駅前。小学校を含む複合ビル。'},
+  {id:'sakura_stage', url:'https://www.shibuya-sakura-stage.com/', n:'渋谷サクラステージ', area:'渋谷', lat:35.6560, lon:139.7024, h:179, f:39, y:2023, st:'done', dev:'東急不動産', w:55, d:70, rot:-25, note:'桜丘口の大規模複合。渋谷駅と歩行者デッキ接続。'},
+  {id:'kabukicho', url:'https://tokyu-kabukicho-tower.jp/', n:'東急歌舞伎町タワー', area:'新宿', lat:35.6952, lon:139.7015, h:225, f:48, y:2023, st:'done', dev:'東急・東急レク', w:45, d:45, rot:0, note:'ホテル×エンタメの超高層。'},
+  {id:'takanawa_gw', url:'https://www.takanawagateway-city.com/', n:'高輪ゲートウェイシティ', area:'品川・高輪', lat:35.6365, lon:139.7405, h:161, f:30, y:2025, st:'done', dev:'JR東日本', w:70, d:130, rot:-15, note:'THE LINKPILLAR 1。車両基地跡の新街区、2025年開業。'},
   {id:'yaesu1_east', n:'八重洲一丁目東B地区', area:'東京駅周辺', lat:35.6810, lon:139.7705, h:250, f:51, y:2026, st:'const', dev:'東京建物ほか', w:55, d:65, rot:0, note:'日本橋川沿い。2025年度末竣工予定。'},
   {id:'nihonbashi1', n:'日本橋一丁目中地区', area:'日本橋', lat:35.6820, lon:139.7740, h:284, f:52, y:2026, st:'const', dev:'三井不動産・野村不動産ほか', w:65, d:75, rot:10, note:'日本橋川沿いの新ランドマーク。'},
-  {id:'wtc', n:'世界貿易センタービル本館建替', area:'浜松町', lat:35.6553, lon:139.7570, h:233, f:46, y:2027, st:'const', dev:'世界貿易センタービルディングほか', w:55, d:70, rot:15, note:'浜松町駅直結の建替プロジェクト。'},
-  {id:'torch', n:'Torch Tower(トーチタワー)', area:'東京駅周辺', lat:35.6866, lon:139.7700, h:385, f:62, y:2028, st:'const', dev:'三菱地所', w:75, d:75, rot:0, note:'完成すれば高さ日本一(385m)。東京タワーより高い。展望施設・ホテル・住宅入り。2028年度竣工予定。'},
+  {id:'wtc', url:'https://www.wtcbldg.co.jp/', n:'世界貿易センタービル本館建替', area:'浜松町', lat:35.6553, lon:139.7570, h:233, f:46, y:2027, st:'const', dev:'世界貿易センタービルディングほか', w:55, d:70, rot:15, note:'浜松町駅直結の建替プロジェクト。'},
+  {id:'torch', url:'https://tokyotorch.mec.co.jp/', n:'Torch Tower(トーチタワー)', area:'東京駅周辺', lat:35.6866, lon:139.7700, h:385, f:62, y:2028, st:'const', dev:'三菱地所', w:75, d:75, rot:0, note:'完成すれば高さ日本一(385m)。東京タワーより高い。展望施設・ホテル・住宅入り。2028年度竣工予定。'},
   {id:'shibuya_uw', n:'Shibuya Upper West Project', area:'渋谷', lat:35.6595, lon:139.6980, h:165, f:36, y:2030, st:'const', dev:'東急・L Catterton', w:55, d:75, rot:-30, note:'東急百貨店本店跡。文化発信×ラグジュアリーホテル。'},
-  {id:'shinjuku_w', n:'新宿駅西口地区(小田急百貨店跡)', area:'新宿', lat:35.6906, lon:139.6990, h:259, f:48, y:2029, st:'const', dev:'小田急電鉄・東急不動産', w:60, d:85, rot:25, note:'新宿の新しい高さ記録へ。2029年度竣工予定、着工済み。'},
+  {id:'shinjuku_w', url:'https://www.tokyu-land.co.jp/mxd/shinjukunishiguchi/', n:'新宿駅西口地区(小田急百貨店跡)', area:'新宿', lat:35.6906, lon:139.6990, h:259, f:48, y:2029, st:'const', dev:'小田急電鉄・東急不動産', w:60, d:85, rot:25, note:'新宿の新しい高さ記録へ。2029年度竣工予定、着工済み。'},
   {id:'shinjuku_sw', n:'新宿駅西南口地区(南街区)', area:'新宿', lat:35.6880, lon:139.6982, h:225, f:37, y:2029, st:'const', dev:'京王電鉄・JR東日本', w:50, d:70, rot:20, note:'甲州街道沿い。北街区(2040年代)と段階整備。'},
   {id:'uchisaiwai', n:'内幸町一丁目街区(TOKYO CROSS PARK)', area:'日比谷', lat:35.6700, lon:139.7550, h:230, f:46, y:2029, st:'plan', dev:'帝国ホテル・NTT・東京電力ほか', w:60, d:75, rot:0, note:'帝国ホテル建替を含む日比谷公園前の巨大構想。段階竣工(〜2030年代)。'},
-  {id:'jingu', n:'神宮外苑地区(複合棟A/B)', area:'神宮外苑', lat:35.6745, lon:139.7180, h:185, f:40, y:2033, st:'plan', dev:'三井不動産・伊藤忠・明治神宮ほか', w:55, d:65, rot:30, note:'野球場・ラグビー場の建替と超高層2棟。全体完成は2030年代半ば。'},
+  {id:'jingu', url:'https://www.jingugaienmachidukuri.jp/', n:'神宮外苑地区(複合棟A/B)', area:'神宮外苑', lat:35.6745, lon:139.7180, h:185, f:40, y:2033, st:'plan', dev:'三井不動産・伊藤忠・明治神宮ほか', w:55, d:65, rot:30, note:'野球場・ラグビー場の建替と超高層2棟。全体完成は2030年代半ば。'},
   {id:'roppongi5', n:'六本木五丁目西地区', area:'六本木', lat:35.6605, lon:139.7325, h:327, f:70, y:2032, st:'plan', dev:'森ビルほか', w:70, d:70, rot:15, note:'麻布台ヒルズ級の超高層を含む大規模再開発。2030年代前半完成目標。'},
   {id:'tsukiji', n:'築地市場跡地(マルチスタジアム構想)', area:'築地', lat:35.6635, lon:139.7690, h:170, f:30, y:2033, st:'plan', dev:'三井不動産ほか', w:220, d:160, rot:35, note:'5万人規模スタジアムを核とした巨大複合開発。第1期2030年代前半。'},
   {id:'shinagawa_w', n:'品川駅西口地区', area:'品川・高輪', lat:35.6295, lon:139.7375, h:150, f:29, y:2033, st:'plan', dev:'京浜急行・トヨタ不動産ほか', w:70, d:110, rot:-15, note:'国道15号上空デッキと一体の駅前再編。'},
   {id:'ikebukuro_w', n:'池袋駅西口地区', area:'池袋', lat:35.7305, lon:139.7075, h:175, f:40, y:2036, st:'plan', dev:'三菱地所ほか', w:65, d:90, rot:10, note:'3棟構成の巨大計画。全体完成は2040年代の長期戦。'},
   {id:'nakano_sun', n:'中野サンプラザ跡(新複合施設)', area:'中野', lat:35.7075, lon:139.6640, h:200, f:40, y:2034, st:'review', dev:'再公募予定(2027年度)', w:70, d:90, rot:-20, note:'当初の262m案(NAKANOサンプラザシティ)は工事費高騰で白紙に。解体のうえ2034年度完成目標で計画再検討中。高さは未定(表示は仮)。'},
+  {id:'tokiwabashi', url:'https://tokyotorch.mec.co.jp/', n:'常盤橋タワー(TOKYO TORCH)', area:'東京駅周辺', lat:35.6855, lon:139.7692, h:212, f:38, y:2021, st:'done', dev:'三菱地所', w:50, d:60, rot:0, note:'TOKYO TORCH街区の第1弾。隣で建設中のTorch Towerと兄弟ビル。足元の大広場ではイベントが多数開催。'},
+  {id:'shibaura', n:'BLUE FRONT SHIBAURA', area:'浜松町', lat:35.6462, lon:139.7543, h:235, f:43, y:2030, st:'const', dev:'野村不動産・JR東日本', w:55, d:70, rot:10, note:'約235mのツインタワー計画。S棟は2025年に完成済み、N棟は2030年頃予定。浜松町の湾岸スカイラインを一新。'},
+  {id:'yaesu2naka', n:'八重洲二丁目中地区', area:'東京駅周辺', lat:35.6778, lon:139.7683, h:226, f:43, y:2029, st:'const', dev:'再開発組合(鹿島ほか)', w:60, d:70, rot:0, note:'ミッドタウン八重洲の南隣。完成すると東京駅前は250m級が4棟並ぶ超高層クラスターに。'},
+  {id:'nishishinjuku3', n:'西新宿三丁目西地区', area:'新宿', lat:35.6857, lon:139.6897, h:235, f:64, y:2033, st:'plan', dev:'野村不動産・東京建物ほか', w:60, d:60, rot:0, note:'約3,200戸・日本最大級の住宅再開発。235m級の超高層住宅を含む巨大計画で、完成すれば住宅タワーとして日本最高クラス。'},
+  {id:'shibuya2west', n:'渋谷二丁目西地区', area:'渋谷', lat:35.6588, lon:139.7053, h:208, f:41, y:2029, st:'const', dev:'再開発組合(東急ほか)', w:55, d:70, rot:-20, note:'渋谷駅東側・青山通り沿いの3棟構成。渋谷エリアの高さ記録級となる約208m。'},
+  {id:'tsukishima3', n:'月島三丁目北地区', area:'月島・勝どき', lat:35.6650, lon:139.7828, h:199, f:58, y:2026, st:'const', dev:'再開発組合(住友不動産ほか)', w:50, d:60, rot:30, note:'もんじゃの街・月島に建つ58階建てタワーマンション。下町と超高層の共存風景が名物に。'},
 ];
 
 const STATUS = {
@@ -150,7 +168,7 @@ function rect(lat, lon, w, d, rot) {
 }
 const FC = { type:'FeatureCollection', features: PROJECTS.map(p => ({
   type:'Feature',
-  properties:{ id:p.id, n:p.n, h:p.h, f:p.f, y:p.y, st:p.st, dev:p.dev, area:p.area, note:p.note },
+  properties:{ id:p.id, n:p.n, h:p.h, f:p.f, y:p.y, st:p.st, dev:p.dev, area:p.area, note:p.note, url:p.url || '' },
   geometry:{ type:'Polygon', coordinates: rect(p.lat, p.lon, p.w, p.d, p.rot) },
 }))};
 
@@ -234,15 +252,22 @@ function onLoad(map) {
   map.on('mouseleave', 'redev-3d', () => map.getCanvas().style.cursor = '');
 }
 
+const hRank = {};
+PROJECTS.slice().sort((a, b) => b.h - a.h).forEach((p, i) => hRank[p.id] = i + 1);
 function openPopup(map, f, lngLat) {
   const p = f.properties, st = STATUS[p.st];
-  new maplibregl.Popup({ offset:12, maxWidth:'300px' }).setLngLat(lngLat).setHTML(
+  const pct = Math.min(100, Math.round(p.h / 385 * 100));
+  const vs = p.h >= 333 ? '🗼 東京タワー(333m)より高い!'
+    : `🗼 東京タワー(333m)の約${Math.round(p.h / 333 * 100)}%の高さ`;
+  new maplibregl.Popup({ offset:12, maxWidth:'310px' }).setLngLat(lngLat).setHTML(
     `<div class="pp-name">${p.n}</div>` +
     `<div class="pp-status" style="color:${st.color}">■ ${st.label}${p.st==='done'?'':' → ' + p.y + '年(予定)'}</div>` +
-    `<div class="pp-row">高さ: <b>約${p.h}m</b> / <b>${p.f}階</b>${p.st==='review'?' (仮)':''}</div>` +
-    `<div class="pp-row">竣工${p.st==='done'?'':'予定'}: <b>${p.y}年${p.st==='done'?'':'頃'}</b></div>` +
-    `<div class="pp-row">事業者: ${p.dev}</div>` +
-    `<div class="pp-note">${p.note}</div>`
+    `<div class="pp-row">高さ: <b>約${p.h}m</b> / <b>${p.f}階</b>${p.st==='review'?' (仮)':''} <span style="color:var(--ink-3)">(収録${PROJECTS.length}件中 第${hRank[p.id]}位)</span></div>` +
+    `<div class="pp-row">竣工${p.st==='done'?'':'予定'}: <b>${p.y}年${p.st==='done'?'':'頃'}</b> / 事業者: ${p.dev}</div>` +
+    `<div class="pp-gauge"><div style="width:${pct}%;background:${st.color}"></div></div>` +
+    `<div class="pp-vs">${vs}</div>` +
+    `<div class="pp-note">${p.note}</div>` +
+    (p.url ? `<a class="pp-link" href="${p.url}" target="_blank" rel="noopener">公式サイト ↗</a>` : '')
   ).addTo(map);
 }
 
@@ -258,7 +283,86 @@ function applyFilter(map) {
   document.getElementById('hint').textContent = `${year}年時点: ${built}棟が完成`;
 }
 
+// ===== PLATEAU 実形状3D都市モデル (国土交通省 Project PLATEAU, 2025年版LOD1) =====
+const PLATEAU_TILESETS = [
+  { id:'chiyoda',   url:'https://assets.cms.plateau.reearth.io/assets/3f/e07412-5455-40c0-9f64-2ac43086a209/13101_chiyoda-ku_pref_2025_citygml_1_op_bldg_3dtiles_13101_chiyoda-ku_lod1/tileset.json' },
+  { id:'chuo',      url:'https://assets.cms.plateau.reearth.io/assets/cf/ccca91-acfc-4e01-b114-a56f63c2cd6b/13102_chuo-ku_pref_2025_citygml_1_op_bldg_3dtiles_13102_chuo-ku_lod1/tileset.json' },
+  { id:'minato',    url:'https://assets.cms.plateau.reearth.io/assets/71/15d8f0-c4e1-4866-8df4-e66cac71c248/13103_minato-ku_pref_2025_citygml_1_op_bldg_3dtiles_13103_minato-ku_lod1/tileset.json' },
+  { id:'shinjuku',  url:'https://assets.cms.plateau.reearth.io/assets/bd/858f21-55cb-46da-afcf-885d44eee90f/13104_shinjuku-ku_pref_2025_citygml_1_op_bldg_3dtiles_13104_shinjuku-ku_lod1/tileset.json' },
+  { id:'shibuya',   url:'https://assets.cms.plateau.reearth.io/assets/cf/26763c-faae-41b3-b110-2a4dd602f250/13113_shibuya-ku_pref_2025_citygml_1_op_bldg_3dtiles_13113_shibuya-ku_lod1/tileset.json' },
+  { id:'nakano',    url:'https://assets.cms.plateau.reearth.io/assets/00/0bafbd-0652-4f11-ab1f-ca88d81a98a7/13114_nakano-ku_pref_2025_citygml_1_op_bldg_3dtiles_13114_nakano-ku_lod1/tileset.json' },
+  { id:'toshima',   url:'https://assets.cms.plateau.reearth.io/assets/0a/f58fff-4c1a-429e-a626-efb32d7423ed/13116_toshima-ku_pref_2025_citygml_1_op_bldg_3dtiles_13116_toshima-ku_lod1/tileset.json' },
+  { id:'shinagawa', url:'https://assets.cms.plateau.reearth.io/assets/27/58e4c5-4b15-4b44-a819-a97fe8842c2d/13109_shinagawa-ku_pref_2025_citygml_1_op_bldg_3dtiles_13109_shinagawa-ku_lod1/tileset.json' },
+];
+const DECK_SRCS = [
+  'https://cdnjs.cloudflare.com/ajax/libs/deck.gl/9.0.38/deck.gl.min.js',
+  'https://unpkg.com/deck.gl@9.0.38/dist.min.js',
+  'https://unpkg.com/deck.gl@%5E9/dist.min.js',
+];
+function loadScript(src) {
+  return new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = src; s.onload = res; s.onerror = () => rej(new Error('load fail: ' + src));
+    document.head.appendChild(s);
+  });
+}
+async function ensureDeck() {
+  if (window.deck) return;
+  for (const src of DECK_SRCS) {
+    try { await loadScript(src); if (window.deck) return; } catch (e) {}
+  }
+  throw new Error('deck.gl を読み込めませんでした');
+}
+let plateauOn = false, plateauOverlay = null, plateauLoadedCount = 0;
+function buildPlateauLayers() {
+  return PLATEAU_TILESETS.map(t => new deck.Tile3DLayer({
+    id: 'plateau-' + t.id,
+    data: t.url,
+    opacity: 0.95,
+    loadOptions: { tileset: { maximumScreenSpaceError: 24 } },
+    onTilesetLoad: () => {
+      plateauLoadedCount++;
+      document.getElementById('hint').textContent = `PLATEAU読み込み中… (${plateauLoadedCount}/${PLATEAU_TILESETS.length}区)`;
+      if (plateauLoadedCount >= PLATEAU_TILESETS.length)
+        document.getElementById('hint').textContent = 'PLATEAU実形状ビル表示中(都心8区)';
+    },
+    onTileError: () => {},
+    _subLayerProps: { scenegraph: {}, mesh: { getColor: [214, 218, 224, 255] } },
+  }));
+}
+async function togglePlateau(map) {
+  const btn = document.getElementById('plateauBtn');
+  if (!plateauOn) {
+    btn.disabled = true;
+    document.getElementById('hint').textContent = 'PLATEAU読み込み中…';
+    try {
+      await ensureDeck();
+      if (!plateauOverlay) {
+        plateauOverlay = new deck.MapboxOverlay({ interleaved: true, layers: buildPlateauLayers() });
+        map.addControl(plateauOverlay);
+      } else {
+        plateauOverlay.setProps({ layers: buildPlateauLayers() });
+      }
+      if (map.getLayer('osm-3d')) map.setLayoutProperty('osm-3d', 'visibility', 'none');
+      plateauOn = true;
+      btn.classList.add('on');
+    } catch (e) {
+      document.getElementById('hint').textContent = '実形状ビルの読み込みに失敗しました(通信環境をご確認ください)';
+      console.warn(e);
+    }
+    btn.disabled = false;
+  } else {
+    plateauLoadedCount = 0;
+    if (plateauOverlay) plateauOverlay.setProps({ layers: [] });
+    if (map.getLayer('osm-3d')) map.setLayoutProperty('osm-3d', 'visibility', 'visible');
+    plateauOn = false;
+    btn.classList.remove('on');
+    applyFilter(map);
+  }
+}
+
 boot().then(map => {
+  document.getElementById('plateauBtn').addEventListener('click', () => togglePlateau(map));
   const slider = document.getElementById('year');
   slider.addEventListener('input', () => {
     year = +slider.value;
