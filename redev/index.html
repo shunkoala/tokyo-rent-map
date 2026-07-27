@@ -186,6 +186,8 @@ function boot() {
   };
   map.on('style.load', init);
   setTimeout(init, 1500); // 保険: イベントを取りこぼしても初期化
+  // 描画が始まらない環境向けの保険
+  [1200, 2500, 5000].forEach(t => setTimeout(() => { map.resize(); map.triggerRepaint(); }, t));
   map.on('error', e => console.warn('map error:', e && e.error && e.error.message));
   document.getElementById('resetView').addEventListener('click', () => map.flyTo({ ...HOME, duration:1200 }));
   return Promise.resolve(map);
