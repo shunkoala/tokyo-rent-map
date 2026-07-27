@@ -167,8 +167,9 @@ async function boot() {
   } catch (e) { style = FALLBACK_STYLE; styleHasBase = false; }
   const map = new maplibregl.Map({ container:'map', style, ...HOME, maxPitch:75, antialias:true, attributionControl:{compact:false} });
   map.addControl(new maplibregl.NavigationControl({ visualizePitch:true }), 'top-left');
-  map.on('load', () => onLoad(map));
-  map.on('error', () => {}); // タイル欠けは無視
+  window.__map = map;
+  map.on('load', () => { try { onLoad(map); console.log('onLoad ok, pitch=', map.getPitch()); } catch(e) { console.error('onLoad failed:', e); } });
+  map.on('error', e => console.warn('map error:', e && e.error && e.error.message));
   document.getElementById('resetView').addEventListener('click', () => map.flyTo({ ...HOME, duration:1200 }));
   return map;
 }
