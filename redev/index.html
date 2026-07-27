@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>東京再開発 3Dマップ — 未来の東京が生えてくる地図</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.css">
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #f8f9fa; --surface: #ffffff; --ink: #202124; --ink-2: #5f6368; --ink-3: #80868b;
+    --border: rgba(60,64,67,.16);
+    --shadow: 0 1px 2px rgba(60,64,67,.3), 0 1px 3px 1px rgba(60,64,67,.15);
+    --accent: #1a73e8; --accent-bg: #e8f0fe; --hover: #f1f3f4;
+    --c-done: #78909c; --c-const: #f5820d; --c-plan: #1a73e8; --c-review: #9334e6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font-family: Roboto, system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif;
+    min-height: 100vh; padding: 18px 22px 30px;
+  }
+  header { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  header h1 { font-size: 22px; font-weight: 700; }
+  header .sub { color: var(--ink-2); font-size: 13px; }
+  header a.back { font-size: 12px; color: var(--accent); text-decoration: none; margin-left: auto; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 14px 0 10px; }
+  .card-btn {
+    background: var(--surface); color: var(--ink-2); border: 1px solid var(--border);
+    border-radius: 999px; padding: 7px 14px; font-size: 12.5px; cursor: pointer;
+    box-shadow: var(--shadow); font-family: inherit; display: inline-flex; align-items: center; gap: 6px;
+  }
+  .card-btn:hover { background: var(--hover); color: var(--ink); }
+  .card-btn.off { opacity: .35; }
+  .dotc { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+  .yearbox {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 999px;
+    box-shadow: var(--shadow); padding: 6px 16px; display: inline-flex; align-items: center; gap: 10px; font-size: 13px;
+  }
+  .yearbox b { color: var(--accent); font-size: 16px; min-width: 52px; text-align: center; }
+  input[type=range] { width: 220px; accent-color: var(--accent); }
+  #hint { color: var(--ink-3); font-size: 12px; }
+  .layout { display: flex; gap: 16px; align-items: stretch; }
+  .mapwrap {
+    flex: 1 1 auto; min-width: 0; border: 1px solid var(--border); border-radius: 14px;
+    position: relative; overflow: hidden; box-shadow: var(--shadow); background: #dfe8ef;
+  }
+  #map { width: 100%; height: 76vh; min-height: 560px; }
+  aside {
+    width: 268px; flex: 0 0 268px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 14px; box-shadow: var(--shadow); overflow-y: auto; max-height: 76vh;
+  }
+  aside h2 { font-size: 14px; margin-bottom: 2px; }
+  aside .note { color: var(--ink-3); font-size: 11px; margin-bottom: 8px; }
+  .pj {
+    padding: 7px 8px; border-radius: 8px; cursor: pointer; font-size: 12.5px;
+    display: grid; grid-template-columns: 10px 1fr auto; gap: 8px; align-items: center;
+  }
+  .pj:hover { background: var(--hover); }
+  .pj .nm { font-weight: 600; }
+  .pj .meta { color: var(--ink-3); font-size: 11px; text-align: right; }
+  .maplibregl-popup-content {
+    font-family: inherit; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,.25);
+    padding: 14px 16px; min-width: 220px;
+  }
+  .pp-name { font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+  .pp-status { font-size: 11px; font-weight: 700; margin-bottom: 6px; }
+  .pp-row { font-size: 12px; color: var(--ink-2); margin-top: 2px; }
+  .pp-row b { color: var(--ink); }
+  .pp-note { font-size: 11px; color: var(--ink-3); margin-top: 6px; line-height: 1.5; }
+  footer { margin-top: 16px; color: var(--ink-3); font-size: 11px; line-height: 1.7; max-width: 960px; }
+  @media (max-width: 900px) {
+    .layout { flex-direction: column; }
+    aside { width: 100%; flex: none; max-height: none; }
+    #map { height: 60vh; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>東京再開発 3Dマップ</h1>
+  <div class="sub">スライダーで年を進めると、未来の超高層ビルが生えてきます。ドラッグで回転(右ドラッグ/Ctrl+ドラッグで視点変更)。</div>
+  <a class="back" href="../">← Tokyo Map Lab</a>
+</header>
+
+<div class="controls">
+  <div class="yearbox">🗓️ <input type="range" id="year" min="2020" max="2045" step="1" value="2036"><b id="yearLabel">2036年</b></div>
+  <button class="card-btn" data-st="done"><span class="dotc" style="background:var(--c-done)"></span>竣工済み(2020〜)</button>
+  <button class="card-btn" data-st="const"><span class="dotc" style="background:var(--c-const)"></span>建設中</button>
+  <button class="card-btn" data-st="plan"><span class="dotc" style="background:var(--c-plan)"></span>計画中</button>
+  <button class="card-btn" data-st="review"><span class="dotc" style="background:var(--c-review)"></span>見直し中</button>
+  <button class="card-btn" id="resetView">🎥 視点リセット</button>
+  <span id="hint"></span>
+</div>
+
+<div class="layout">
+  <div class="mapwrap"><div id="map"></div></div>
+  <aside>
+    <h2>🏗️ 収録プロジェクト</h2>
+    <div class="note">クリックでズーム。高さ・竣工年は公表資料をもとにした目安(2026年7月時点)。</div>
+    <div id="pjlist"></div>
+  </aside>
+</div>
+
+<footer>
+  <b>データについて</b> — 収録した再開発プロジェクトの高さ・階数・竣工予定は、事業者の公表資料や報道をもとにした<b>2026年7月時点の目安</b>です。計画は変更・延期されることがあります。ビルの形状は敷地位置に置いた簡略モデルで、実際の意匠とは異なります。周囲の現在の街並みはOpenStreetMapの建物データを立体化したものです。地図: © OpenStreetMap contributors, © OpenFreeMap。
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/maplibre-gl/4.7.1/maplibre-gl.min.js"></script>
+<script>
+'use strict';
+// ===== 再開発プロジェクトデータ (2026年7月時点の目安) =====
+// h: 高さm / f: 階数 / y: 竣工(予定)年 / st: done|const|plan|review / w,d,rot: 簡略フットプリント(m,deg)
+const PROJECTS = [
+  {id:'azabudai', n:'麻布台ヒルズ 森JPタワー', area:'虎ノ門・麻布台', lat:35.6595, lon:139.7447, h:330, f:64, y:2023, st:'done', dev:'森ビル', w:70, d:70, rot:20, note:'日本一の高さ(現時点)。オフィス・住宅・商業の複合「ヒルズの未来形」。'},
+  {id:'toranomon_st', n:'虎ノ門ヒルズ ステーションタワー', area:'虎ノ門・麻布台', lat:35.6672, lon:139.7495, h:266, f:49, y:2023, st:'done', dev:'森ビル', w:60, d:60, rot:0, note:'日比谷線虎ノ門ヒルズ駅直結。'},
+  {id:'yaesu_mt', n:'東京ミッドタウン八重洲', area:'東京駅周辺', lat:35.6795, lon:139.7690, h:240, f:45, y:2023, st:'done', dev:'三井不動産', w:60, d:80, rot:0, note:'東京駅前。小学校を含む複合ビル。'},
+  {id:'sakura_stage', n:'渋谷サクラステージ', area:'渋谷', lat:35.6560, lon:139.7024, h:179, f:39, y:2023, st:'done', dev:'東急不動産', w:55, d:70, rot:-25, note:'桜丘口の大規模複合。渋谷駅と歩行者デッキ接続。'},
+  {id:'kabukicho', n:'東急歌舞伎町タワー', area:'新宿', lat:35.6952, lon:139.7015, h:225, f:48, y:2023, st:'done', dev:'東急・東急レク', w:45, d:45, rot:0, note:'ホテル×エンタメの超高層。'},
+  {id:'takanawa_gw', n:'高輪ゲートウェイシティ', area:'品川・高輪', lat:35.6365, lon:139.7405, h:161, f:30, y:2025, st:'done', dev:'JR東日本', w:70, d:130, rot:-15, note:'THE LINKPILLAR 1。車両基地跡の新街区、2025年開業。'},
+  {id:'yaesu1_east', n:'八重洲一丁目東B地区', area:'東京駅周辺', lat:35.6810, lon:139.7705, h:250, f:51, y:2026, st:'const', dev:'東京建物ほか', w:55, d:65, rot:0, note:'日本橋川沿い。2025年度末竣工予定。'},
+  {id:'nihonbashi1', n:'日本橋一丁目中地区', area:'日本橋', lat:35.6820, lon:139.7740, h:284, f:52, y:2026, st:'const', dev:'三井不動産・野村不動産ほか', w:65, d:75, rot:10, note:'日本橋川沿いの新ランドマーク。'},
+  {id:'wtc', n:'世界貿易センタービル本館建替', area:'浜松町', lat:35.6553, lon:139.7570, h:233, f:46, y:2027, st:'const', dev:'世界貿易センタービルディングほか', w:55, d:70, rot:15, note:'浜松町駅直結の建替プロジェクト。'},
+  {id:'torch', n:'Torch Tower(トーチタワー)', area:'東京駅周辺', lat:35.6866, lon:139.7700, h:385, f:62, y:2028, st:'const', dev:'三菱地所', w:75, d:75, rot:0, note:'完成すれば高さ日本一(385m)。東京タワーより高い。展望施設・ホテル・住宅入り。2028年度竣工予定。'},
+  {id:'shibuya_uw', n:'Shibuya Upper West Project', area:'渋谷', lat:35.6595, lon:139.6980, h:165, f:36, y:2030, st:'const', dev:'東急・L Catterton', w:55, d:75, rot:-30, note:'東急百貨店本店跡。文化発信×ラグジュアリーホテル。'},
+  {id:'shinjuku_w', n:'新宿駅西口地区(小田急百貨店跡)', area:'新宿', lat:35.6906, lon:139.6990, h:259, f:48, y:2029, st:'const', dev:'小田急電鉄・東急不動産', w:60, d:85, rot:25, note:'新宿の新しい高さ記録へ。2029年度竣工予定、着工済み。'},
+  {id:'shinjuku_sw', n:'新宿駅西南口地区(南街区)', area:'新宿', lat:35.6880, lon:139.6982, h:225, f:37, y:2029, st:'const', dev:'京王電鉄・JR東日本', w:50, d:70, rot:20, note:'甲州街道沿い。北街区(2040年代)と段階整備。'},
+  {id:'uchisaiwai', n:'内幸町一丁目街区(TOKYO CROSS PARK)', area:'日比谷', lat:35.6700, lon:139.7550, h:230, f:46, y:2029, st:'plan', dev:'帝国ホテル・NTT・東京電力ほか', w:60, d:75, rot:0, note:'帝国ホテル建替を含む日比谷公園前の巨大構想。段階竣工(〜2030年代)。'},
+  {id:'jingu', n:'神宮外苑地区(複合棟A/B)', area:'神宮外苑', lat:35.6745, lon:139.7180, h:185, f:40, y:2033, st:'plan', dev:'三井不動産・伊藤忠・明治神宮ほか', w:55, d:65, rot:30, note:'野球場・ラグビー場の建替と超高層2棟。全体完成は2030年代半ば。'},
+  {id:'roppongi5', n:'六本木五丁目西地区', area:'六本木', lat:35.6605, lon:139.7325, h:327, f:70, y:2032, st:'plan', dev:'森ビルほか', w:70, d:70, rot:15, note:'麻布台ヒルズ級の超高層を含む大規模再開発。2030年代前半完成目標。'},
+  {id:'tsukiji', n:'築地市場跡地(マルチスタジアム構想)', area:'築地', lat:35.6635, lon:139.7690, h:170, f:30, y:2033, st:'plan', dev:'三井不動産ほか', w:220, d:160, rot:35, note:'5万人規模スタジアムを核とした巨大複合開発。第1期2030年代前半。'},
+  {id:'shinagawa_w', n:'品川駅西口地区', area:'品川・高輪', lat:35.6295, lon:139.7375, h:150, f:29, y:2033, st:'plan', dev:'京浜急行・トヨタ不動産ほか', w:70, d:110, rot:-15, note:'国道15号上空デッキと一体の駅前再編。'},
+  {id:'ikebukuro_w', n:'池袋駅西口地区', area:'池袋', lat:35.7305, lon:139.7075, h:175, f:40, y:2036, st:'plan', dev:'三菱地所ほか', w:65, d:90, rot:10, note:'3棟構成の巨大計画。全体完成は2040年代の長期戦。'},
+  {id:'nakano_sun', n:'中野サンプラザ跡(新複合施設)', area:'中野', lat:35.7075, lon:139.6640, h:200, f:40, y:2034, st:'review', dev:'再公募予定(2027年度)', w:70, d:90, rot:-20, note:'当初の262m案(NAKANOサンプラザシティ)は工事費高騰で白紙に。解体のうえ2034年度完成目標で計画再検討中。高さは未定(表示は仮)。'},
+];
+
+const STATUS = {
+  done:  { label:'竣工済み', color:'#78909c' },
+  const: { label:'建設中',   color:'#f5820d' },
+  plan:  { label:'計画中',   color:'#1a73e8' },
+  review:{ label:'見直し中', color:'#9334e6' },
+};
+
+// フットプリント生成(中心+寸法+回転 → ポリゴン)
+function rect(lat, lon, w, d, rot) {
+  const mLat = 1 / 111320, mLon = 1 / (111320 * Math.cos(lat * Math.PI / 180));
+  const r = rot * Math.PI / 180, c = Math.cos(r), s = Math.sin(r);
+  return [[[-w/2,-d/2],[w/2,-d/2],[w/2,d/2],[-w/2,d/2],[-w/2,-d/2]].map(([x,y]) =>
+    [lon + (x*c - y*s) * mLon, lat + (x*s + y*c) * mLat])];
+}
+const FC = { type:'FeatureCollection', features: PROJECTS.map(p => ({
+  type:'Feature',
+  properties:{ id:p.id, n:p.n, h:p.h, f:p.f, y:p.y, st:p.st, dev:p.dev, area:p.area, note:p.note },
+  geometry:{ type:'Polygon', coordinates: rect(p.lat, p.lon, p.w, p.d, p.rot) },
+}))};
+
+// ===== 地図 =====
+const HOME = { center:[139.745, 35.668], zoom:12.6, pitch:57, bearing:-20 };
+const FALLBACK_STYLE = { version:8, sources:{}, layers:[{ id:'bg', type:'background', paint:{'background-color':'#dfe8ef'} }] };
+let styleHasBase = true;
+
+async function boot() {
+  let style = 'https://tiles.openfreemap.org/styles/positron';
+  try {
+    const r = await fetch(style, { mode:'cors' });
+    if (!r.ok) throw 0;
+  } catch (e) { style = FALLBACK_STYLE; styleHasBase = false; }
+  const map = new maplibregl.Map({ container:'map', style, ...HOME, maxPitch:75, antialias:true, attributionControl:{compact:false} });
+  map.addControl(new maplibregl.NavigationControl({ visualizePitch:true }), 'top-left');
+  map.on('load', () => onLoad(map));
+  map.on('error', () => {}); // タイル欠けは無視
+  document.getElementById('resetView').addEventListener('click', () => map.flyTo({ ...HOME, duration:1200 }));
+  return map;
+}
+
+function onLoad(map) {
+  // 現在の街並み(OSM建物)を3D化
+  if (styleHasBase) {
+    const src = map.getStyle().sources.openmaptiles ? 'openmaptiles'
+      : Object.keys(map.getStyle().sources).find(k => map.getStyle().sources[k].type === 'vector');
+    if (src) {
+      map.addLayer({
+        id:'osm-3d', type:'fill-extrusion', source:src, 'source-layer':'building', minzoom:13,
+        paint:{
+          'fill-extrusion-color':'#d5d9dd',
+          'fill-extrusion-height':['coalesce',['get','render_height'],['get','height'],8],
+          'fill-extrusion-base':['coalesce',['get','render_min_height'],0],
+          'fill-extrusion-opacity':.75,
+        }});
+    }
+  }
+  map.addSource('redev', { type:'geojson', data:FC });
+  // 未来分のゴースト(まだ年が来ていない計画)
+  map.addLayer({ id:'redev-ghost', type:'line', source:'redev',
+    paint:{ 'line-color':['match',['get','st'],'plan','#1a73e8','review','#9334e6','const','#f5820d','#78909c'], 'line-width':2, 'line-dasharray':[2,2], 'line-opacity':.8 } });
+  // 本体
+  map.addLayer({ id:'redev-3d', type:'fill-extrusion', source:'redev',
+    paint:{
+      'fill-extrusion-color':['match',['get','st'],'done','#78909c','const','#f5820d','plan','#1a73e8','review','#9334e6','#78909c'],
+      'fill-extrusion-height':['get','h'],
+      'fill-extrusion-opacity':.82,
+    }});
+  applyFilter(map);
+
+  map.on('click', 'redev-3d', ev => openPopup(map, ev.features[0], ev.lngLat));
+  map.on('click', 'redev-ghost', ev => openPopup(map, ev.features[0], ev.lngLat));
+  map.on('mouseenter', 'redev-3d', () => map.getCanvas().style.cursor = 'pointer');
+  map.on('mouseleave', 'redev-3d', () => map.getCanvas().style.cursor = '');
+}
+
+function openPopup(map, f, lngLat) {
+  const p = f.properties, st = STATUS[p.st];
+  new maplibregl.Popup({ offset:12, maxWidth:'300px' }).setLngLat(lngLat).setHTML(
+    `<div class="pp-name">${p.n}</div>` +
+    `<div class="pp-status" style="color:${st.color}">■ ${st.label}${p.st==='done'?'':' → ' + p.y + '年(予定)'}</div>` +
+    `<div class="pp-row">高さ: <b>約${p.h}m</b> / <b>${p.f}階</b>${p.st==='review'?' (仮)':''}</div>` +
+    `<div class="pp-row">竣工${p.st==='done'?'':'予定'}: <b>${p.y}年${p.st==='done'?'':'頃'}</b></div>` +
+    `<div class="pp-row">事業者: ${p.dev}</div>` +
+    `<div class="pp-note">${p.note}</div>`
+  ).addTo(map);
+}
+
+// ===== フィルタ(年スライダー × ステータス) =====
+const activeSt = new Set(['done','const','plan','review']);
+let year = 2036;
+function applyFilter(map) {
+  if (!map.getLayer('redev-3d')) return;
+  const stArr = [...activeSt];
+  map.setFilter('redev-3d', ['all', ['<=',['get','y'], year], ['in',['get','st'],['literal',stArr]]]);
+  map.setFilter('redev-ghost', ['all', ['>',['get','y'], year], ['in',['get','st'],['literal',stArr]]]);
+  const built = PROJECTS.filter(p => p.y <= year && activeSt.has(p.st)).length;
+  document.getElementById('hint').textContent = `${year}年時点: ${built}棟が完成`;
+}
+
+boot().then(map => {
+  const slider = document.getElementById('year');
+  slider.addEventListener('input', () => {
+    year = +slider.value;
+    document.getElementById('yearLabel').textContent = year + '年';
+    applyFilter(map);
+  });
+  document.querySelectorAll('.card-btn[data-st]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const st = btn.dataset.st;
+      if (activeSt.has(st)) activeSt.delete(st); else activeSt.add(st);
+      btn.classList.toggle('off', !activeSt.has(st));
+      applyFilter(map);
+    });
+  });
+  // サイドバー
+  const list = document.getElementById('pjlist');
+  const areas = [...new Set(PROJECTS.map(p => p.area))];
+  areas.forEach(a => {
+    const h = document.createElement('div');
+    h.style.cssText = 'font-size:11px;color:var(--ink-3);font-weight:700;margin:8px 2px 2px;';
+    h.textContent = a;
+    list.appendChild(h);
+    PROJECTS.filter(p => p.area === a).sort((x,y2) => y2.h - x.h).forEach(p => {
+      const el = document.createElement('div');
+      el.className = 'pj';
+      el.innerHTML = `<span class="dotc" style="background:${STATUS[p.st].color}"></span>` +
+        `<span class="nm">${p.n}</span><span class="meta">${p.h}m<br>${p.y}年</span>`;
+      el.addEventListener('click', () => {
+        map.flyTo({ center:[p.lon, p.lat], zoom:15.4, pitch:60, bearing:-20, duration:1400 });
+        if (p.y > +slider.value) { slider.value = p.y; slider.dispatchEvent(new Event('input')); }
+        setTimeout(() => openPopup(map, { properties:{ ...p } }, { lng:p.lon, lat:p.lat }), 1450);
+      });
+      list.appendChild(el);
+    });
+  });
+});
+</script>
+</body>
+</html>
